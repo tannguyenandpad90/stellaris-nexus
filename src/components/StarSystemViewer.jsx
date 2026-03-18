@@ -101,7 +101,7 @@ function MiniOrrery({ system }) {
   )
 }
 
-export default function StarSystemViewer({ system, onClose }) {
+export default function StarSystemViewer({ system, onClose, onEnterSystem }) {
   const [expandedPlanet, setExpandedPlanet] = useState(null)
 
   if (!system) return null
@@ -197,11 +197,22 @@ export default function StarSystemViewer({ system, onClose }) {
           ))}
         </div>
 
+        {/* Enter 3D System */}
+        {system.numPlanets > 0 && (
+          <div className="px-4 py-2 border-t border-panel-border shrink-0">
+            <button
+              onClick={() => onEnterSystem?.(system)}
+              className="w-full glass-panel rounded-lg px-4 py-2.5 text-sm text-neon-cyan hover:bg-neon-cyan/10 transition-colors cursor-pointer border border-neon-cyan/30 font-[family-name:var(--font-orbitron)] tracking-wider"
+            >
+              EXPLORE IN 3D →
+            </button>
+          </div>
+        )}
+
         {/* Footer */}
         <div className="px-4 py-2 border-t border-panel-border shrink-0">
           <p className="text-[8px] text-gray-600 text-center">
-            System generated from galactic position ({system.position.x.toFixed(2)}, {system.position.y.toFixed(2)}, {system.position.z.toFixed(2)})
-            &middot; Deterministic seed — same star always generates the same system
+            Deterministic seed — same star always generates the same system
           </p>
         </div>
       </div>
