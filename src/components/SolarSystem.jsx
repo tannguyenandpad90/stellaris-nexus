@@ -1,0 +1,77 @@
+import { Canvas } from '@react-three/fiber'
+import { OrbitControls, Stars } from '@react-three/drei'
+import { Suspense } from 'react'
+import Sun from './Sun'
+import Planet from './Planet'
+import OrbitRing from './OrbitRing'
+import planets from '../data/planets.json'
+
+function LoadingFallback() {
+  return (
+    <mesh>
+      <sphereGeometry args={[1, 16, 16]} />
+      <meshBasicMaterial color="#00f5ff" wireframe />
+    </mesh>
+  )
+}
+
+export default function SolarSystem({ onPlanetSelect, selectedPlanet, timeScale }) {
+  return (
+    <Canvas
+      camera={{ position: [0, 30, 50], fov: 60, near: 0.1, far: 1000 }}
+      style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%' }}
+      gl={{ antialias: true, alpha: false }}
+      dpr={[1, 1.5]}
+    >
+      <color attach="background" args={['#040410']} />
+
+      <Suspense fallback={<LoadingFallback />}>
+        {/* Ambient space lighting */}
+        <ambientLight intensity={0.08} />
+
+        {/* Starfield background */}
+        <Stars
+          radius={200}
+          depth={100}
+          count={8000}
+          factor={4}
+          saturation={0.2}
+          fade
+          speed={0.5}
+        />
+
+        {/* Sun */}
+        <Sun />
+
+        {/* Planets with orbits */}
+        {planets.map((planet) => (
+          <group key={planet.id}>
+            <OrbitRing
+              radius={planet.orbitRadius}
+              isSelected={selectedPlanet?.id === planet.id}
+            />
+            <Planet
+              data={planet}
+              timeScale={timeScale}
+              isSelected={selectedPlanet?.id === planet.id}
+              onClick={() => onPlanetSelect(planet.id)}
+            />
+          </group>
+        ))}
+      </Suspense>
+
+      {/* Camera controls */}
+      <OrbitControls
+        enableDamping
+        dampingFactor={0.05}
+        minDistance={5}
+        maxDistance={120}
+        maxPolarAngle={Math.PI * 0.85}
+        enablePan={true}
+        panSpeed={0.5}
+        rotateSpeed={0.5}
+        zoomSpeed={0.8}
+      />
+    </Canvas>
+  )
+}
