@@ -10,6 +10,7 @@ import MarsGallery from './components/MarsGallery'
 import ExoplanetPanel from './components/ExoplanetPanel'
 import DeepSpacePanel from './components/DeepSpacePanel'
 import StarInfoPanel from './components/StarInfoPanel'
+import StarSystemViewer from './components/StarSystemViewer'
 import ScaleNavigator from './components/ScaleNavigator'
 import ISSTracker from './components/ISSTracker'
 import SpaceWeatherPanel from './components/SpaceWeatherPanel'
@@ -26,9 +27,10 @@ function App() {
   const [scale, setScale] = useState('solar')
   const [selectedPlanet, setSelectedPlanet] = useState(null)
   const [selectedStar, setSelectedStar] = useState(null)
+  const [proceduralSystem, setProceduralSystem] = useState(null)
+  const [proceduralPos, setProceduralPos] = useState(null)
   const [timeScale, setTimeScale] = useState(1)
 
-  // Panel visibility
   const [panels, setPanels] = useState({
     travel: false,
     chat: false,
@@ -46,18 +48,15 @@ function App() {
   const togglePanel = useCallback((name) => {
     setPanels((prev) => {
       const next = { ...prev, [name]: !prev[name] }
-      // Close conflicting left panels
       const leftPanels = ['asteroids', 'mars', 'exoplanets', 'deepSpace', 'missions']
       if (leftPanels.includes(name) && next[name]) {
         leftPanels.forEach((p) => { if (p !== name) next[p] = false })
         setSelectedPlanet(null)
       }
-      // Close conflicting right panels
       const rightPanels = ['travel', 'iss', 'weather']
       if (rightPanels.includes(name) && next[name]) {
         rightPanels.forEach((p) => { if (p !== name) next[p] = false })
       }
-      // Close conflicting center panels
       const centerPanels = ['gravity', 'size']
       if (centerPanels.includes(name) && next[name]) {
         centerPanels.forEach((p) => { if (p !== name) next[p] = false })
@@ -78,14 +77,23 @@ function App() {
 
   const handleStarSelect = useCallback((star) => {
     setSelectedStar(star)
+    setProceduralSystem(null)
+    setProceduralPos(null)
+  }, [])
+
+  const handleProceduralStarSelect = useCallback((system) => {
+    setProceduralSystem(system)
+    setProceduralPos([system.wx, system.wy, system.wz])
+    setSelectedStar(null)
   }, [])
 
   const handleScaleChange = useCallback((newScale) => {
     setSelectedPlanet(null)
     setSelectedStar(null)
+    setProceduralSystem(null)
+    setProceduralPos(null)
     setPanels((prev) => {
       const next = { ...prev }
-      // Close scale-specific panels
       Object.keys(next).forEach((k) => { if (k !== 'chat') next[k] = false })
       if (newScale === 'deepspace') next.deepSpace = true
       return next
@@ -96,6 +104,8 @@ function App() {
   const handleGoToSolarSystem = useCallback(() => {
     setScale('solar')
     setSelectedStar(null)
+    setProceduralSystem(null)
+    setProceduralPos(null)
     setPanels((prev) => {
       const next = { ...prev }
       Object.keys(next).forEach((k) => { if (k !== 'chat') next[k] = false })
@@ -113,7 +123,6 @@ function App() {
 
       <ApodBackground />
 
-      {/* 3D Scenes */}
       {isSolar && (
         <SolarSystem
           onPlanetSelect={handlePlanetSelect}
@@ -122,7 +131,12 @@ function App() {
         />
       )}
       {(isGalaxy || isDeepSpace) && (
-        <GalaxyView onStarSelect={handleStarSelect} selectedStar={selectedStar} />
+        <GalaxyView
+          onStarSelect={handleStarSelect}
+          selectedStar={selectedStar}
+          onProceduralStarSelect={handleProceduralStarSelect}
+          selectedProceduralPos={proceduralPos}
+        />
       )}
 
       <ScaleNavigator currentScale={scale} onScaleChange={handleScaleChange} />
@@ -156,20 +170,26 @@ function App() {
       )}
 
       {/* === RIGHT PANELS === */}
-      {isGalaxy && selectedStar && (
+      {isGalaxy && selectedStar && !proceduralSystem && (
         <StarInfoPanel
           star={selectedStar}
           onClose={() => setSelectedStar(null)}
           onGoToSolarSystem={selectedStar.name === 'Sol' ? handleGoToSolarSystem : null}
         />
       )}
+      {(isGalaxy || isDeepSpace) && proceduralSystem && (
+        <StarSystemViewer
+          system={proceduralSystem}
+          onClose={() => { setProceduralSystem(null); setProceduralPos(null) }}
+        />
+      )}
       {isSolar && panels.travel && (
         <TravelCalculator planets={planets} onClose={() => closePanel('travel')} />
       )}
-      {panels.iss && (
+      {panels.iss && !proceduralSystem && (
         <ISSTracker onClose={() => closePanel('iss')} />
       )}
-      {panels.weather && (
+      {panels.weather && !proceduralSystem && (
         <SpaceWeatherPanel onClose={() => closePanel('weather')} />
       )}
 
@@ -183,7 +203,7 @@ function App() {
 
       {/* === GLOBAL === */}
       {panels.chat && <AIChatPanel onClose={() => closePanel('chat')} />}
-      <AudioManager />
+      <AudioManager scale={scale} />
     </div>
   )
 }

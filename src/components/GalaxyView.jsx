@@ -1,9 +1,10 @@
 import { Canvas } from '@react-three/fiber'
 import { OrbitControls, Stars, Html } from '@react-three/drei'
-import { Suspense, useRef, useMemo, useState } from 'react'
-import { useFrame } from '@react-three/fiber'
+import { Suspense, useRef, useMemo, useState, useCallback } from 'react'
+import { useFrame, useThree } from '@react-three/fiber'
 import * as THREE from 'three'
 import PostProcessing from './PostProcessing'
+import { generateStarSystem } from '../data/starSystemGenerator'
 
 // Generate spiral arm points
 function generateSpiralArm(count, armOffset, spread, armLength) {
@@ -12,12 +13,9 @@ function generateSpiralArm(count, armOffset, spread, armLength) {
     const t = (i / count) * armLength
     const angle = t * 2.5 + armOffset
     const radius = t * 12 + 2
-
-    // Add spread/randomness
     const rx = (Math.random() - 0.5) * spread * (1 + t * 0.5)
     const ry = (Math.random() - 0.5) * spread * 0.3
     const rz = (Math.random() - 0.5) * spread * (1 + t * 0.5)
-
     points.push({
       x: Math.cos(angle) * radius + rx,
       y: ry,
@@ -31,31 +29,24 @@ function generateSpiralArm(count, armOffset, spread, armLength) {
 
 // Notable star systems with real data
 const NOTABLE_STARS = [
-  { name: 'Sol', x: 8, y: 0, z: 0, color: '#ffd700', info: 'Our Sun — 8 planets, home of humanity', type: 'G2V' },
-  { name: 'Alpha Centauri', x: 8.2, y: 0.1, z: 0.3, color: '#fff4e0', info: 'Nearest star system — 4.37 ly away, triple star', type: 'G2V + K1V' },
-  { name: 'Sirius', x: 8.6, y: 0, z: -0.5, color: '#a8d8ff', info: 'Brightest star in night sky — 8.6 ly, binary system', type: 'A1V' },
-  { name: 'Betelgeuse', x: 7, y: 0.3, z: -3, color: '#ff6b4a', info: 'Red supergiant in Orion — 700 ly, may go supernova', type: 'M1-2Ia' },
-  { name: 'Vega', x: 8.1, y: 0.1, z: 1.2, color: '#c8e0ff', info: 'Part of Summer Triangle — 25 ly, has debris disk', type: 'A0V' },
-  { name: 'TRAPPIST-1', x: 8.3, y: -0.05, z: 0.2, color: '#ff9999', info: '7 Earth-sized planets, 3 in habitable zone — 40 ly', type: 'M8V' },
-  { name: 'Kepler-442', x: 6.5, y: 0.2, z: 2, color: '#ffcc80', info: 'Hosts super-Earth in habitable zone — 1,206 ly', type: 'K' },
-  { name: 'Sagittarius A*', x: 0, y: 0, z: 0, color: '#000000', info: 'Supermassive black hole at galactic center — 4M solar masses', type: 'Black Hole' },
+  { name: 'Sol', x: 8, y: 0, z: 0, color: '#ffd700', info: 'Our Sun — 8 planets, home of humanity', type: 'G2V', notable: true },
+  { name: 'Alpha Centauri', x: 8.2, y: 0.1, z: 0.3, color: '#fff4e0', info: 'Nearest star system — 4.37 ly away, triple star', type: 'G2V + K1V', notable: true },
+  { name: 'Sirius', x: 8.6, y: 0, z: -0.5, color: '#a8d8ff', info: 'Brightest star in night sky — 8.6 ly, binary system', type: 'A1V', notable: true },
+  { name: 'Betelgeuse', x: 7, y: 0.3, z: -3, color: '#ff6b4a', info: 'Red supergiant in Orion — 700 ly, may go supernova', type: 'M1-2Ia', notable: true },
+  { name: 'Vega', x: 8.1, y: 0.1, z: 1.2, color: '#c8e0ff', info: 'Part of Summer Triangle — 25 ly, has debris disk', type: 'A0V', notable: true },
+  { name: 'TRAPPIST-1', x: 8.3, y: -0.05, z: 0.2, color: '#ff9999', info: '7 Earth-sized planets, 3 in habitable zone — 40 ly', type: 'M8V', notable: true },
+  { name: 'Kepler-442', x: 6.5, y: 0.2, z: 2, color: '#ffcc80', info: 'Hosts super-Earth in habitable zone — 1,206 ly', type: 'K', notable: true },
+  { name: 'Sagittarius A*', x: 0, y: 0, z: 0, color: '#000000', info: 'Supermassive black hole at galactic center — 4M solar masses', type: 'Black Hole', notable: true },
 ]
 
-function GalaxyParticles() {
+function ClickableGalaxyParticles({ onStarClick }) {
   const meshRef = useRef()
   const dummy = useMemo(() => new THREE.Object3D(), [])
 
   const allStars = useMemo(() => {
     const stars = []
-    // 4 spiral arms
     for (let arm = 0; arm < 4; arm++) {
-      const armStars = generateSpiralArm(
-        3000,
-        (arm * Math.PI) / 2,
-        2.5,
-        3.5
-      )
-      stars.push(...armStars)
+      stars.push(...generateSpiralArm(3000, (arm * Math.PI) / 2, 2.5, 3.5))
     }
     // Core bulge
     for (let i = 0; i < 4000; i++) {
@@ -70,7 +61,7 @@ function GalaxyParticles() {
         size: Math.random() * 0.12 + 0.03,
       })
     }
-    // Scattered halo stars
+    // Halo
     for (let i = 0; i < 2000; i++) {
       const r = 5 + Math.random() * 50
       const theta = Math.random() * Math.PI * 2
@@ -86,18 +77,8 @@ function GalaxyParticles() {
     return stars
   }, [])
 
-  // Star colors based on temperature
-  const colors = useMemo(() => {
-    return allStars.map(() => {
-      const temp = Math.random()
-      if (temp < 0.1) return new THREE.Color('#ff8866') // M-type red
-      if (temp < 0.3) return new THREE.Color('#ffcc88') // K-type orange
-      if (temp < 0.5) return new THREE.Color('#fff8e8') // G-type yellow-white
-      if (temp < 0.7) return new THREE.Color('#f0f0ff') // F-type white
-      if (temp < 0.9) return new THREE.Color('#c8d8ff') // A-type blue-white
-      return new THREE.Color('#9db4ff') // B/O-type blue
-    })
-  }, [allStars])
+  // Store current world positions for click detection
+  const worldPositions = useRef(new Float32Array(allStars.length * 3))
 
   useFrame((state) => {
     if (!meshRef.current) return
@@ -105,17 +86,21 @@ function GalaxyParticles() {
 
     for (let i = 0; i < allStars.length; i++) {
       const star = allStars[i]
-      // Slow galactic rotation
       const dist = Math.sqrt(star.x ** 2 + star.z ** 2)
       const baseAngle = Math.atan2(star.z, star.x)
-      const rotSpeed = 0.1 / (1 + dist * 0.05) // Inner stars rotate faster
+      const rotSpeed = 0.1 / (1 + dist * 0.05)
       const angle = baseAngle + t * rotSpeed
 
-      dummy.position.set(
-        Math.cos(angle) * dist,
-        star.y,
-        Math.sin(angle) * dist
-      )
+      const wx = Math.cos(angle) * dist
+      const wy = star.y
+      const wz = Math.sin(angle) * dist
+
+      // Store for click lookup
+      worldPositions.current[i * 3] = wx
+      worldPositions.current[i * 3 + 1] = wy
+      worldPositions.current[i * 3 + 2] = wz
+
+      dummy.position.set(wx, wy, wz)
       dummy.scale.setScalar(star.size * (0.8 + Math.sin(t * 2 + i) * 0.2))
       dummy.updateMatrix()
       meshRef.current.setMatrixAt(i, dummy.matrix)
@@ -123,8 +108,37 @@ function GalaxyParticles() {
     meshRef.current.instanceMatrix.needsUpdate = true
   })
 
+  const handleClick = useCallback((e) => {
+    e.stopPropagation()
+    if (e.instanceId !== undefined && e.instanceId !== null) {
+      const idx = e.instanceId
+      const x = worldPositions.current[idx * 3]
+      const y = worldPositions.current[idx * 3 + 1]
+      const z = worldPositions.current[idx * 3 + 2]
+
+      // Generate system from this star's position
+      const system = generateStarSystem(x, y, z)
+      onStarClick({ ...system, instanceId: idx, wx: x, wy: y, wz: z })
+    }
+  }, [onStarClick])
+
+  const handlePointerOver = useCallback((e) => {
+    e.stopPropagation()
+    document.body.style.cursor = 'pointer'
+  }, [])
+
+  const handlePointerOut = useCallback(() => {
+    document.body.style.cursor = 'default'
+  }, [])
+
   return (
-    <instancedMesh ref={meshRef} args={[null, null, allStars.length]}>
+    <instancedMesh
+      ref={meshRef}
+      args={[null, null, allStars.length]}
+      onClick={handleClick}
+      onPointerOver={handlePointerOver}
+      onPointerOut={handlePointerOut}
+    >
       <sphereGeometry args={[1, 6, 6]} />
       <meshBasicMaterial color="#ffffff" toneMapped={false} />
     </instancedMesh>
@@ -133,7 +147,6 @@ function GalaxyParticles() {
 
 function GalacticCore() {
   const ref = useRef()
-
   useFrame((state) => {
     const t = state.clock.getElapsedTime()
     if (ref.current) {
@@ -141,10 +154,8 @@ function GalacticCore() {
       ref.current.scale.setScalar(1 + Math.sin(t * 0.5) * 0.05)
     }
   })
-
   return (
     <group ref={ref}>
-      {/* Core glow */}
       <mesh>
         <sphereGeometry args={[2, 32, 32]} />
         <meshBasicMaterial color="#ffd700" transparent opacity={0.4} />
@@ -153,12 +164,10 @@ function GalacticCore() {
         <sphereGeometry args={[3.5, 32, 32]} />
         <meshBasicMaterial color="#ff8c00" transparent opacity={0.08} side={THREE.BackSide} />
       </mesh>
-      {/* Accretion disk hint */}
       <mesh rotation={[Math.PI * 0.5, 0, 0]}>
         <ringGeometry args={[0.5, 2.5, 64]} />
         <meshBasicMaterial color="#ffa500" transparent opacity={0.15} side={THREE.DoubleSide} />
       </mesh>
-      {/* Core light */}
       <pointLight color="#ffd700" intensity={100} distance={80} decay={1.5} />
     </group>
   )
@@ -166,7 +175,6 @@ function GalacticCore() {
 
 function NotableStarMarker({ star, onClick, isSelected }) {
   const [hovered, setHovered] = useState(false)
-
   return (
     <group position={[star.x, star.y, star.z]}>
       <mesh
@@ -175,22 +183,15 @@ function NotableStarMarker({ star, onClick, isSelected }) {
         onPointerOut={() => { setHovered(false); document.body.style.cursor = 'default' }}
       >
         <sphereGeometry args={[0.25, 16, 16]} />
-        <meshBasicMaterial
-          color={star.color === '#000000' ? '#330033' : star.color}
-          toneMapped={false}
-        />
+        <meshBasicMaterial color={star.color === '#000000' ? '#330033' : star.color} toneMapped={false} />
       </mesh>
-
-      {/* Glow ring */}
       {(hovered || isSelected) && (
         <>
           <mesh>
             <sphereGeometry args={[0.4, 16, 16]} />
             <meshBasicMaterial
               color={star.name === 'Sagittarius A*' ? '#9900ff' : '#00f5ff'}
-              transparent
-              opacity={0.2}
-              side={THREE.BackSide}
+              transparent opacity={0.2} side={THREE.BackSide}
             />
           </mesh>
           <Html center distanceFactor={20} style={{ pointerEvents: 'none' }}>
@@ -200,8 +201,6 @@ function NotableStarMarker({ star, onClick, isSelected }) {
           </Html>
         </>
       )}
-
-      {/* Pulsing beacon for Sol */}
       {star.name === 'Sol' && (
         <mesh>
           <sphereGeometry args={[0.35, 16, 16]} />
@@ -212,15 +211,37 @@ function NotableStarMarker({ star, onClick, isSelected }) {
   )
 }
 
-function GalaxyScene({ onStarSelect, selectedStar }) {
+// Highlight ring around selected star
+function SelectedStarHighlight({ position }) {
+  const ref = useRef()
+  useFrame((state) => {
+    if (ref.current) {
+      ref.current.rotation.z = state.clock.getElapsedTime() * 0.5
+    }
+  })
+  if (!position) return null
+  return (
+    <group position={position}>
+      <mesh ref={ref} rotation={[Math.PI * 0.5, 0, 0]}>
+        <ringGeometry args={[0.3, 0.5, 32]} />
+        <meshBasicMaterial color="#00f5ff" transparent opacity={0.3} side={THREE.DoubleSide} />
+      </mesh>
+      <mesh>
+        <sphereGeometry args={[0.6, 16, 16]} />
+        <meshBasicMaterial color="#00f5ff" transparent opacity={0.08} side={THREE.BackSide} />
+      </mesh>
+    </group>
+  )
+}
+
+function GalaxyScene({ onStarSelect, onProceduralStarSelect, selectedStar, selectedProceduralPos }) {
   return (
     <>
       <ambientLight intensity={0.02} />
-
       <Stars radius={300} depth={200} count={3000} factor={6} saturation={0.3} fade speed={0.3} />
-
       <GalacticCore />
-      <GalaxyParticles />
+
+      <ClickableGalaxyParticles onStarClick={onProceduralStarSelect} />
 
       {NOTABLE_STARS.map((star) => (
         <NotableStarMarker
@@ -231,6 +252,10 @@ function GalaxyScene({ onStarSelect, selectedStar }) {
         />
       ))}
 
+      {selectedProceduralPos && (
+        <SelectedStarHighlight position={selectedProceduralPos} />
+      )}
+
       <PostProcessing />
     </>
   )
@@ -238,7 +263,7 @@ function GalaxyScene({ onStarSelect, selectedStar }) {
 
 export { NOTABLE_STARS }
 
-export default function GalaxyView({ onStarSelect, selectedStar }) {
+export default function GalaxyView({ onStarSelect, selectedStar, onProceduralStarSelect, selectedProceduralPos }) {
   return (
     <Canvas
       camera={{ position: [0, 35, 55], fov: 60, near: 0.1, far: 1000 }}
@@ -247,19 +272,19 @@ export default function GalaxyView({ onStarSelect, selectedStar }) {
       dpr={[1, 1.5]}
     >
       <color attach="background" args={['#020208']} />
-
       <Suspense fallback={null}>
-        <GalaxyScene onStarSelect={onStarSelect} selectedStar={selectedStar} />
+        <GalaxyScene
+          onStarSelect={onStarSelect}
+          onProceduralStarSelect={onProceduralStarSelect}
+          selectedStar={selectedStar}
+          selectedProceduralPos={selectedProceduralPos}
+        />
       </Suspense>
-
       <OrbitControls
-        enableDamping
-        dampingFactor={0.05}
-        minDistance={8}
-        maxDistance={150}
+        enableDamping dampingFactor={0.05}
+        minDistance={8} maxDistance={150}
         maxPolarAngle={Math.PI * 0.85}
-        rotateSpeed={0.4}
-        zoomSpeed={0.6}
+        rotateSpeed={0.4} zoomSpeed={0.6}
       />
     </Canvas>
   )
