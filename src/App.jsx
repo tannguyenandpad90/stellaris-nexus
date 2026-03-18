@@ -6,10 +6,13 @@ import AIChatPanel from './components/AIChatPanel'
 import ApodBackground from './components/ApodBackground'
 import AsteroidAlert from './components/AsteroidAlert'
 import MarsGallery from './components/MarsGallery'
+import LoadingScreen from './components/LoadingScreen'
+import AudioManager from './components/AudioManager'
 import Header from './components/Header'
 import planets from './data/planets.json'
 
 function App() {
+  const [loaded, setLoaded] = useState(false)
   const [selectedPlanet, setSelectedPlanet] = useState(null)
   const [showTravel, setShowTravel] = useState(false)
   const [showChat, setShowChat] = useState(false)
@@ -20,7 +23,6 @@ function App() {
   const handlePlanetSelect = useCallback((planetId) => {
     const planet = planets.find(p => p.id === planetId)
     setSelectedPlanet(planet)
-    // Close other left panels
     setShowAsteroids(false)
     setShowMars(false)
   }, [])
@@ -43,6 +45,9 @@ function App() {
 
   return (
     <div className="w-full h-full relative">
+      {/* Cinematic Loading Screen */}
+      {!loaded && <LoadingScreen onComplete={() => setLoaded(true)} />}
+
       {/* NASA APOD Background */}
       <ApodBackground />
 
@@ -97,6 +102,9 @@ function App() {
       {showChat && (
         <AIChatPanel onClose={() => setShowChat(false)} />
       )}
+
+      {/* Ambient Space Audio */}
+      <AudioManager />
     </div>
   )
 }

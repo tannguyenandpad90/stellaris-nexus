@@ -1,9 +1,12 @@
 import { Canvas } from '@react-three/fiber'
 import { OrbitControls, Stars } from '@react-three/drei'
-import { Suspense } from 'react'
+import { Suspense, useRef } from 'react'
 import Sun from './Sun'
 import Planet from './Planet'
 import OrbitRing from './OrbitRing'
+import AsteroidBelt3D from './AsteroidBelt3D'
+import CameraController from './CameraController'
+import PostProcessing from './PostProcessing'
 import planets from '../data/planets.json'
 
 function LoadingFallback() {
@@ -15,49 +18,67 @@ function LoadingFallback() {
   )
 }
 
+function Scene({ onPlanetSelect, selectedPlanet, timeScale, planetPositions }) {
+  return (
+    <>
+      {/* Ambient space lighting */}
+      <ambientLight intensity={0.08} />
+
+      {/* Starfield background */}
+      <Stars
+        radius={200}
+        depth={100}
+        count={8000}
+        factor={4}
+        saturation={0.2}
+        fade
+        speed={0.5}
+      />
+
+      {/* Sun */}
+      <Sun />
+
+      {/* Asteroid Belt between Mars and Jupiter */}
+      <AsteroidBelt3D count={500} />
+
+      {/* Planets with orbits */}
+      {planets.map((planet) => (
+        <group key={planet.id}>
+          <OrbitRing
+            radius={planet.orbitRadius}
+            isSelected={selectedPlanet?.id === planet.id}
+          />
+          <Planet
+            data={planet}
+            timeScale={timeScale}
+            isSelected={selectedPlanet?.id === planet.id}
+            onClick={() => onPlanetSelect(planet.id)}
+          />
+        </group>
+      ))}
+
+      {/* Post-processing effects: Bloom + Vignette */}
+      <PostProcessing />
+    </>
+  )
+}
+
 export default function SolarSystem({ onPlanetSelect, selectedPlanet, timeScale }) {
   return (
     <Canvas
       camera={{ position: [0, 30, 50], fov: 60, near: 0.1, far: 1000 }}
       style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%' }}
-      gl={{ antialias: true, alpha: false }}
+      gl={{ antialias: true, alpha: false, toneMapping: 3 }}
       dpr={[1, 1.5]}
     >
       <color attach="background" args={['#040410']} />
 
       <Suspense fallback={<LoadingFallback />}>
-        {/* Ambient space lighting */}
-        <ambientLight intensity={0.08} />
-
-        {/* Starfield background */}
-        <Stars
-          radius={200}
-          depth={100}
-          count={8000}
-          factor={4}
-          saturation={0.2}
-          fade
-          speed={0.5}
+        <Scene
+          onPlanetSelect={onPlanetSelect}
+          selectedPlanet={selectedPlanet}
+          timeScale={timeScale}
         />
-
-        {/* Sun */}
-        <Sun />
-
-        {/* Planets with orbits */}
-        {planets.map((planet) => (
-          <group key={planet.id}>
-            <OrbitRing
-              radius={planet.orbitRadius}
-              isSelected={selectedPlanet?.id === planet.id}
-            />
-            <Planet
-              data={planet}
-              timeScale={timeScale}
-              isSelected={selectedPlanet?.id === planet.id}
-              onClick={() => onPlanetSelect(planet.id)}
-            />
-          </group>
-        ))}
       </Suspense>
 
       {/* Camera controls */}
