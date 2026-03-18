@@ -1,341 +1,252 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 
-// Seeded random for deterministic melodies
-function seededRandom(seed) {
-  let s = seed
-  return () => {
-    s = (s * 16807) % 2147483647
-    return (s - 1) / 2147483646
-  }
-}
-
-// Musical scales (frequencies in Hz)
+// Musical scales (Hz)
 const SCALES = {
-  solar: [130.81, 146.83, 164.81, 174.61, 196.00, 220.00, 246.94, 261.63], // C major (warm)
-  galaxy: [130.81, 155.56, 164.81, 196.00, 233.08, 261.63, 311.13, 329.63], // C minor pentatonic (mysterious)
-  deepspace: [130.81, 138.59, 164.81, 185.00, 207.65, 233.08, 261.63, 277.18], // Phrygian (dark, eerie)
+  solar: [130.81, 146.83, 164.81, 174.61, 196.00, 220.00, 246.94, 261.63],
+  galaxy: [130.81, 155.56, 164.81, 196.00, 233.08, 261.63, 311.13, 329.63],
+  deepspace: [130.81, 138.59, 164.81, 185.00, 207.65, 233.08, 261.63, 277.18],
 }
 
-function createLayer(ctx, type, config) {
-  const gain = ctx.createGain()
-  gain.gain.value = 0
-
-  if (type === 'drone') {
-    const oscs = config.frequencies.map((freq) => {
-      const osc = ctx.createOscillator()
-      osc.type = config.waveform || 'sine'
-      osc.frequency.value = freq
-      // Detune slightly for richness
-      osc.detune.value = (Math.random() - 0.5) * config.detune
-      const oscGain = ctx.createGain()
-      oscGain.gain.value = config.volume || 0.3
-      osc.connect(oscGain).connect(gain)
-      return osc
-    })
-
-    // LFO for slow movement
-    const lfo = ctx.createOscillator()
-    lfo.type = 'sine'
-    lfo.frequency.value = config.lfoRate || 0.05
-    const lfoGain = ctx.createGain()
-    lfoGain.gain.value = config.lfoDepth || 3
-    lfo.connect(lfoGain).connect(oscs[0].frequency)
-
-    return {
-      gain,
-      start: () => { oscs.forEach((o) => o.start()); lfo.start() },
-      stop: () => { oscs.forEach((o) => o.stop()); lfo.stop() },
-    }
-  }
-
-  if (type === 'pad') {
-    const oscs = config.frequencies.map((freq, i) => {
-      const osc = ctx.createOscillator()
-      osc.type = 'triangle'
-      osc.frequency.value = freq
-      osc.detune.value = (i % 2 === 0 ? 1 : -1) * (config.detune || 4)
-      const oscGain = ctx.createGain()
-      oscGain.gain.value = config.volume || 0.05
-      osc.connect(oscGain).connect(gain)
-      return osc
-    })
-
-    return {
-      gain,
-      start: () => oscs.forEach((o) => o.start()),
-      stop: () => oscs.forEach((o) => o.stop()),
-    }
-  }
-
-  if (type === 'noise') {
-    const bufferSize = ctx.sampleRate * 2
-    const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate)
-    const data = buffer.getChannelData(0)
-    for (let i = 0; i < bufferSize; i++) {
-      data[i] = (Math.random() * 2 - 1) * (config.amplitude || 0.008)
-    }
-    const noise = ctx.createBufferSource()
-    noise.buffer = buffer
-    noise.loop = true
-    const filter = ctx.createBiquadFilter()
-    filter.type = config.filterType || 'lowpass'
-    filter.frequency.value = config.filterFreq || 400
-    filter.Q.value = config.filterQ || 1
-    noise.connect(filter).connect(gain)
-
-    return {
-      gain,
-      start: () => noise.start(),
-      stop: () => noise.stop(),
-    }
-  }
-
-  if (type === 'melody') {
-    // Generative melody using scheduled oscillators
-    const scale = config.scale || SCALES.solar
-    const rng = seededRandom(config.seed || 42)
-    let scheduledUntil = 0
-
-    const scheduleNotes = (startTime) => {
-      for (let i = 0; i < 16; i++) {
-        const noteTime = startTime + i * (config.noteInterval || 2.5)
-        if (rng() > (config.density || 0.35)) continue // Skip some notes
-
-        const freq = scale[Math.floor(rng() * scale.length)]
-        const octave = rng() > 0.5 ? 2 : 1
-        const duration = (config.noteDuration || 1.8) + rng() * 1.5
-
-        const osc = ctx.createOscillator()
-        osc.type = 'sine'
-        osc.frequency.value = freq * octave
-
-        const noteGain = ctx.createGain()
-        noteGain.gain.setValueAtTime(0, noteTime)
-        noteGain.gain.linearRampToValueAtTime(config.volume || 0.03, noteTime + 0.3)
-        noteGain.gain.linearRampToValueAtTime(0, noteTime + duration)
-
-        osc.connect(noteGain).connect(gain)
-        osc.start(noteTime)
-        osc.stop(noteTime + duration + 0.1)
-
-        scheduledUntil = Math.max(scheduledUntil, noteTime + duration)
-      }
-    }
-
-    // Re-schedule periodically
-    let intervalId = null
-
-    return {
-      gain,
-      start: () => {
-        scheduleNotes(ctx.currentTime + 0.5)
-        intervalId = setInterval(() => {
-          if (ctx.currentTime > scheduledUntil - 10) {
-            scheduleNotes(scheduledUntil)
-          }
-        }, 5000)
-      },
-      stop: () => { if (intervalId) clearInterval(intervalId) },
-    }
-  }
-
-  return { gain, start: () => {}, stop: () => {} }
+const MODE_CONFIGS = {
+  solar: {
+    droneFreqs: [55, 82.41, 110],
+    droneVol: 0.18,
+    padFreqs: [261.63, 329.63, 392.00],
+    padVol: 0.025,
+    noiseVol: 0.004,
+    noiseFreq: 350,
+    melodyScale: 'solar',
+    melodyInterval: 3.0,
+    melodyDensity: 0.3,
+    melodyVol: 0.02,
+    lfoRate: 0.04,
+  },
+  galaxy: {
+    droneFreqs: [41.2, 61.74, 82.41],
+    droneVol: 0.2,
+    padFreqs: [196.00, 233.08, 311.13],
+    padVol: 0.02,
+    noiseVol: 0.006,
+    noiseFreq: 200,
+    melodyScale: 'galaxy',
+    melodyInterval: 4.0,
+    melodyDensity: 0.2,
+    melodyVol: 0.015,
+    lfoRate: 0.025,
+  },
+  deepspace: {
+    droneFreqs: [32.7, 49.0, 65.41],
+    droneVol: 0.22,
+    padFreqs: [138.59, 164.81, 207.65],
+    padVol: 0.018,
+    noiseVol: 0.008,
+    noiseFreq: 150,
+    melodyScale: 'deepspace',
+    melodyInterval: 5.0,
+    melodyDensity: 0.15,
+    melodyVol: 0.012,
+    lfoRate: 0.015,
+  },
 }
 
-// Create the full soundscape for a given mode
 function createSoundscape(ctx, mode) {
+  const cfg = MODE_CONFIGS[mode] || MODE_CONFIGS.solar
   const master = ctx.createGain()
-  master.gain.value = 0
+  master.gain.setValueAtTime(0, ctx.currentTime)
 
-  // Reverb via convolution approximation (feedback delay)
-  const delay = ctx.createDelay(1)
-  delay.delayTime.value = 0.4
-  const feedback = ctx.createGain()
-  feedback.gain.value = 0.3
-  const reverbFilter = ctx.createBiquadFilter()
-  reverbFilter.type = 'lowpass'
-  reverbFilter.frequency.value = 2000
-  master.connect(delay)
-  delay.connect(feedback).connect(reverbFilter).connect(delay)
-  reverbFilter.connect(ctx.destination)
+  // Connect master → destination
   master.connect(ctx.destination)
 
-  const layers = []
+  // === DRONE layer ===
+  const droneGain = ctx.createGain()
+  droneGain.gain.setValueAtTime(cfg.droneVol, ctx.currentTime)
+  droneGain.connect(master)
 
-  if (mode === 'solar') {
-    layers.push(createLayer(ctx, 'drone', {
-      frequencies: [55, 82.41, 110],
-      waveform: 'sine',
-      detune: 6,
-      volume: 0.25,
-      lfoRate: 0.04,
-      lfoDepth: 3,
-    }))
-    layers.push(createLayer(ctx, 'pad', {
-      frequencies: [261.63, 329.63, 392.00],
-      detune: 5,
-      volume: 0.035,
-    }))
-    layers.push(createLayer(ctx, 'noise', {
-      amplitude: 0.006,
-      filterFreq: 350,
-    }))
-    layers.push(createLayer(ctx, 'melody', {
-      scale: SCALES.solar,
-      seed: 12345,
-      noteInterval: 3.0,
-      density: 0.3,
-      volume: 0.025,
-      noteDuration: 2.0,
-    }))
+  const drones = cfg.droneFreqs.map((freq) => {
+    const osc = ctx.createOscillator()
+    osc.type = 'sine'
+    osc.frequency.setValueAtTime(freq, ctx.currentTime)
+    osc.detune.setValueAtTime((Math.random() - 0.5) * 8, ctx.currentTime)
+    osc.connect(droneGain)
+    return osc
+  })
+
+  // LFO modulation on first drone
+  const lfo = ctx.createOscillator()
+  lfo.type = 'sine'
+  lfo.frequency.setValueAtTime(cfg.lfoRate, ctx.currentTime)
+  const lfoGain = ctx.createGain()
+  lfoGain.gain.setValueAtTime(4, ctx.currentTime)
+  lfo.connect(lfoGain)
+  lfoGain.connect(drones[0].frequency)
+
+  // === PAD layer ===
+  const padGain = ctx.createGain()
+  padGain.gain.setValueAtTime(cfg.padVol, ctx.currentTime)
+  padGain.connect(master)
+
+  const pads = cfg.padFreqs.map((freq, i) => {
+    const osc = ctx.createOscillator()
+    osc.type = 'triangle'
+    osc.frequency.setValueAtTime(freq, ctx.currentTime)
+    osc.detune.setValueAtTime((i % 2 === 0 ? 5 : -5), ctx.currentTime)
+    osc.connect(padGain)
+    return osc
+  })
+
+  // === NOISE layer ===
+  const noiseGain = ctx.createGain()
+  noiseGain.gain.setValueAtTime(cfg.noiseVol, ctx.currentTime)
+  noiseGain.connect(master)
+
+  const bufferSize = ctx.sampleRate * 2
+  const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate)
+  const noiseData = buffer.getChannelData(0)
+  for (let i = 0; i < bufferSize; i++) {
+    noiseData[i] = (Math.random() * 2 - 1)
+  }
+  const noise = ctx.createBufferSource()
+  noise.buffer = buffer
+  noise.loop = true
+  const noiseFilter = ctx.createBiquadFilter()
+  noiseFilter.type = 'lowpass'
+  noiseFilter.frequency.setValueAtTime(cfg.noiseFreq, ctx.currentTime)
+  noise.connect(noiseFilter)
+  noiseFilter.connect(noiseGain)
+
+  // === MELODY layer (scheduled notes) ===
+  const melodyGain = ctx.createGain()
+  melodyGain.gain.setValueAtTime(cfg.melodyVol, ctx.currentTime)
+  melodyGain.connect(master)
+
+  const scale = SCALES[cfg.melodyScale]
+  let melodyScheduledUntil = 0
+  let seed = mode === 'solar' ? 12345 : mode === 'galaxy' ? 67890 : 99999
+
+  function nextRand() {
+    seed = (seed * 16807) % 2147483647
+    return (seed - 1) / 2147483646
   }
 
-  if (mode === 'galaxy') {
-    layers.push(createLayer(ctx, 'drone', {
-      frequencies: [41.2, 61.74, 82.41],
-      waveform: 'sine',
-      detune: 10,
-      volume: 0.3,
-      lfoRate: 0.025,
-      lfoDepth: 5,
-    }))
-    layers.push(createLayer(ctx, 'pad', {
-      frequencies: [196.00, 233.08, 311.13, 369.99],
-      detune: 8,
-      volume: 0.03,
-    }))
-    layers.push(createLayer(ctx, 'noise', {
-      amplitude: 0.01,
-      filterType: 'bandpass',
-      filterFreq: 200,
-      filterQ: 2,
-    }))
-    layers.push(createLayer(ctx, 'melody', {
-      scale: SCALES.galaxy,
-      seed: 67890,
-      noteInterval: 4.0,
-      density: 0.2,
-      volume: 0.02,
-      noteDuration: 3.0,
-    }))
+  function scheduleNotes(startTime) {
+    for (let i = 0; i < 20; i++) {
+      const noteTime = startTime + i * cfg.melodyInterval
+      if (nextRand() > cfg.melodyDensity) continue
+
+      const freq = scale[Math.floor(nextRand() * scale.length)]
+      const octave = nextRand() > 0.5 ? 2 : 1
+      const dur = 1.5 + nextRand() * 2.5
+
+      const osc = ctx.createOscillator()
+      osc.type = 'sine'
+      osc.frequency.setValueAtTime(freq * octave, noteTime)
+
+      const env = ctx.createGain()
+      env.gain.setValueAtTime(0.001, noteTime)
+      env.gain.linearRampToValueAtTime(1.0, noteTime + 0.4)
+      env.gain.exponentialRampToValueAtTime(0.001, noteTime + dur)
+
+      osc.connect(env)
+      env.connect(melodyGain)
+      osc.start(noteTime)
+      osc.stop(noteTime + dur + 0.1)
+
+      melodyScheduledUntil = Math.max(melodyScheduledUntil, noteTime + dur)
+    }
   }
 
-  if (mode === 'deepspace') {
-    layers.push(createLayer(ctx, 'drone', {
-      frequencies: [32.7, 49.0, 65.41],
-      waveform: 'sine',
-      detune: 15,
-      volume: 0.35,
-      lfoRate: 0.015,
-      lfoDepth: 8,
-    }))
-    layers.push(createLayer(ctx, 'pad', {
-      frequencies: [138.59, 164.81, 207.65, 277.18],
-      detune: 12,
-      volume: 0.025,
-    }))
-    layers.push(createLayer(ctx, 'noise', {
-      amplitude: 0.015,
-      filterFreq: 150,
-      filterQ: 3,
-    }))
-    layers.push(createLayer(ctx, 'melody', {
-      scale: SCALES.deepspace,
-      seed: 99999,
-      noteInterval: 5.0,
-      density: 0.15,
-      volume: 0.018,
-      noteDuration: 4.0,
-    }))
-  }
-
-  // Connect all layers to master
-  layers.forEach((l) => l.gain.connect(master))
+  let melodyInterval = null
 
   return {
     master,
-    layers,
-    fadeIn: (duration = 2) => {
-      master.gain.linearRampToValueAtTime(0.18, ctx.currentTime + duration)
+    start() {
+      drones.forEach((o) => o.start())
+      lfo.start()
+      pads.forEach((o) => o.start())
+      noise.start()
+      scheduleNotes(ctx.currentTime + 1)
+      melodyInterval = setInterval(() => {
+        if (ctx.currentTime > melodyScheduledUntil - 15) {
+          scheduleNotes(melodyScheduledUntil)
+        }
+      }, 5000)
     },
-    fadeOut: (duration = 2) => {
-      master.gain.linearRampToValueAtTime(0, ctx.currentTime + duration)
+    fadeIn(dur = 2) {
+      master.gain.cancelScheduledValues(ctx.currentTime)
+      master.gain.setValueAtTime(master.gain.value, ctx.currentTime)
+      master.gain.linearRampToValueAtTime(0.25, ctx.currentTime + dur)
     },
-    start: () => layers.forEach((l) => l.start()),
-    stop: () => layers.forEach((l) => l.stop()),
+    fadeOut(dur = 1.5) {
+      master.gain.cancelScheduledValues(ctx.currentTime)
+      master.gain.setValueAtTime(master.gain.value, ctx.currentTime)
+      master.gain.linearRampToValueAtTime(0, ctx.currentTime + dur)
+    },
+    cleanup() {
+      if (melodyInterval) clearInterval(melodyInterval)
+    },
   }
 }
 
 export default function AudioManager({ scale = 'solar' }) {
-  const [muted, setMuted] = useState(true)
-  const [initialized, setInitialized] = useState(false)
-  const audioCtxRef = useRef(null)
-  const soundscapesRef = useRef({})
-  const currentModeRef = useRef(null)
+  const [playing, setPlaying] = useState(false)
+  const ctxRef = useRef(null)
+  const scapesRef = useRef({})
+  const modeRef = useRef(null)
 
-  // Switch soundscape when scale changes
+  const getMode = useCallback((s) => (s === 'deepspace' ? 'deepspace' : s), [])
+
+  // Crossfade when scale changes
   useEffect(() => {
-    if (!initialized || muted) return
-    const ctx = audioCtxRef.current
-    if (!ctx) return
+    if (!playing || !ctxRef.current) return
+    const ctx = ctxRef.current
+    const newMode = getMode(scale)
+    const oldMode = modeRef.current
+    if (oldMode === newMode) return
 
-    const prevMode = currentModeRef.current
-    const newMode = scale === 'deepspace' ? 'deepspace' : scale
-
-    if (prevMode === newMode) return
-
-    // Fade out previous
-    if (prevMode && soundscapesRef.current[prevMode]) {
-      soundscapesRef.current[prevMode].fadeOut(1.5)
+    // Fade out old
+    if (oldMode && scapesRef.current[oldMode]) {
+      scapesRef.current[oldMode].fadeOut(1.5)
     }
 
-    // Create or fade in new
-    if (!soundscapesRef.current[newMode]) {
+    // Create + fade in new
+    if (!scapesRef.current[newMode]) {
       const s = createSoundscape(ctx, newMode)
       s.start()
-      soundscapesRef.current[newMode] = s
+      scapesRef.current[newMode] = s
     }
-    soundscapesRef.current[newMode].fadeIn(2)
+    scapesRef.current[newMode].fadeIn(2)
+    modeRef.current = newMode
+  }, [scale, playing, getMode])
 
-    currentModeRef.current = newMode
-  }, [scale, initialized, muted])
-
-  const toggleAudio = useCallback(() => {
-    if (!initialized) {
-      const ctx = new (window.AudioContext || window.webkitAudioContext)()
-      audioCtxRef.current = ctx
-
-      const mode = scale === 'deepspace' ? 'deepspace' : scale
-      const s = createSoundscape(ctx, mode)
-      s.start()
-      s.fadeIn(2)
-      soundscapesRef.current[mode] = s
-      currentModeRef.current = mode
-
-      setInitialized(true)
-      setMuted(false)
-    } else {
-      const newMuted = !muted
-      setMuted(newMuted)
-
-      // Fade all soundscapes
-      Object.values(soundscapesRef.current).forEach((s) => {
-        if (newMuted) s.fadeOut(0.5)
-      })
-
-      if (!newMuted) {
-        const mode = scale === 'deepspace' ? 'deepspace' : scale
-        if (soundscapesRef.current[mode]) {
-          soundscapesRef.current[mode].fadeIn(1)
-        }
+  const toggle = useCallback(() => {
+    if (!playing) {
+      // First play or resume
+      if (!ctxRef.current) {
+        ctxRef.current = new (window.AudioContext || window.webkitAudioContext)()
       }
+      const ctx = ctxRef.current
+      if (ctx.state === 'suspended') ctx.resume()
+
+      const mode = getMode(scale)
+      if (!scapesRef.current[mode]) {
+        const s = createSoundscape(ctx, mode)
+        s.start()
+        scapesRef.current[mode] = s
+      }
+      scapesRef.current[mode].fadeIn(1.5)
+      modeRef.current = mode
+      setPlaying(true)
+    } else {
+      // Mute all
+      Object.values(scapesRef.current).forEach((s) => s.fadeOut(0.8))
+      setPlaying(false)
     }
-  }, [initialized, muted, scale])
+  }, [playing, scale, getMode])
 
   useEffect(() => {
     return () => {
-      Object.values(soundscapesRef.current).forEach((s) => s.stop())
-      if (audioCtxRef.current) audioCtxRef.current.close()
+      Object.values(scapesRef.current).forEach((s) => s.cleanup())
+      if (ctxRef.current) ctxRef.current.close()
     }
   }, [])
 
@@ -343,11 +254,11 @@ export default function AudioManager({ scale = 'solar' }) {
 
   return (
     <button
-      onClick={toggleAudio}
+      onClick={toggle}
       className="absolute bottom-4 right-4 z-20 glass-panel rounded-full h-10 flex items-center gap-2 px-3 hover:bg-white/10 transition-colors cursor-pointer group"
-      title={muted ? 'Enable ambient music' : 'Mute'}
+      title={playing ? `Playing: ${modeLabel} — Click to mute` : 'Enable ambient music'}
     >
-      {muted ? (
+      {!playing ? (
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-gray-400 group-hover:text-neon-cyan transition-colors">
           <path d="M11 5L6 9H2v6h4l5 4V5z" />
           <line x1="23" y1="9" x2="17" y2="15" />
@@ -359,9 +270,13 @@ export default function AudioManager({ scale = 'solar' }) {
             <path d="M11 5L6 9H2v6h4l5 4V5z" />
             <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07" />
           </svg>
-          <span className="text-[9px] text-neon-cyan/60 font-[family-name:var(--font-orbitron)] tracking-wider hidden group-hover:inline">
-            {modeLabel}
-          </span>
+          {/* Animated bars */}
+          <div className="flex items-end gap-0.5 h-3">
+            <div className="w-0.5 bg-neon-cyan rounded-full animate-pulse" style={{ height: '40%', animationDelay: '0ms' }} />
+            <div className="w-0.5 bg-neon-cyan rounded-full animate-pulse" style={{ height: '80%', animationDelay: '200ms' }} />
+            <div className="w-0.5 bg-neon-cyan rounded-full animate-pulse" style={{ height: '50%', animationDelay: '400ms' }} />
+            <div className="w-0.5 bg-neon-cyan rounded-full animate-pulse" style={{ height: '90%', animationDelay: '100ms' }} />
+          </div>
         </>
       )}
     </button>

@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useRef } from 'react'
 import SolarSystem from './components/SolarSystem'
 import GalaxyView from './components/GalaxyView'
 import PlanetDashboard from './components/PlanetDashboard'
@@ -12,6 +12,7 @@ import DeepSpacePanel from './components/DeepSpacePanel'
 import StarInfoPanel from './components/StarInfoPanel'
 import StarSystemViewer from './components/StarSystemViewer'
 import ScaleNavigator from './components/ScaleNavigator'
+import ScaleTransition from './components/ScaleTransition'
 import ISSTracker from './components/ISSTracker'
 import SpaceWeatherPanel from './components/SpaceWeatherPanel'
 import GravitySimulator from './components/GravitySimulator'
@@ -20,11 +21,13 @@ import MissionTimeline from './components/MissionTimeline'
 import LoadingScreen from './components/LoadingScreen'
 import AudioManager from './components/AudioManager'
 import Header from './components/Header'
+import useKeyboardShortcuts from './hooks/useKeyboardShortcuts'
 import planets from './data/planets.json'
 
 function App() {
   const [loaded, setLoaded] = useState(false)
   const [scale, setScale] = useState('solar')
+  const prevScaleRef = useRef(null)
   const [selectedPlanet, setSelectedPlanet] = useState(null)
   const [selectedStar, setSelectedStar] = useState(null)
   const [proceduralSystem, setProceduralSystem] = useState(null)
@@ -32,17 +35,9 @@ function App() {
   const [timeScale, setTimeScale] = useState(1)
 
   const [panels, setPanels] = useState({
-    travel: false,
-    chat: false,
-    asteroids: false,
-    mars: false,
-    exoplanets: false,
-    deepSpace: false,
-    iss: false,
-    weather: false,
-    gravity: false,
-    size: false,
-    missions: false,
+    travel: false, chat: false, asteroids: false, mars: false,
+    exoplanets: false, deepSpace: false, iss: false, weather: false,
+    gravity: false, size: false, missions: false,
   })
 
   const togglePanel = useCallback((name) => {
@@ -70,8 +65,7 @@ function App() {
   }, [])
 
   const handlePlanetSelect = useCallback((planetId) => {
-    const planet = planets.find(p => p.id === planetId)
-    setSelectedPlanet(planet)
+    setSelectedPlanet(planets.find(p => p.id === planetId))
     setPanels((prev) => ({ ...prev, asteroids: false, mars: false, missions: false }))
   }, [])
 
@@ -88,6 +82,7 @@ function App() {
   }, [])
 
   const handleScaleChange = useCallback((newScale) => {
+    prevScaleRef.current = scale
     setSelectedPlanet(null)
     setSelectedStar(null)
     setProceduralSystem(null)
@@ -99,9 +94,10 @@ function App() {
       return next
     })
     setScale(newScale)
-  }, [])
+  }, [scale])
 
   const handleGoToSolarSystem = useCallback(() => {
+    prevScaleRef.current = scale
     setScale('solar')
     setSelectedStar(null)
     setProceduralSystem(null)
@@ -111,7 +107,30 @@ function App() {
       Object.keys(next).forEach((k) => { if (k !== 'chat') next[k] = false })
       return next
     })
-  }, [])
+  }, [scale])
+
+  const handleEscape = useCallback(() => {
+    setSelectedPlanet(null)
+    setSelectedStar(null)
+    if (proceduralSystem) {
+      setProceduralSystem(null)
+      setProceduralPos(null)
+    } else {
+      setPanels((prev) => {
+        const next = { ...prev }
+        Object.keys(next).forEach((k) => { next[k] = false })
+        return next
+      })
+    }
+  }, [proceduralSystem])
+
+  // Keyboard shortcuts
+  useKeyboardShortcuts({
+    onScaleChange: handleScaleChange,
+    onEscape: handleEscape,
+    onTogglePanel: togglePanel,
+    currentScale: scale,
+  })
 
   const isSolar = scale === 'solar'
   const isGalaxy = scale === 'galaxy'
@@ -121,89 +140,57 @@ function App() {
     <div className="w-full h-full relative">
       {!loaded && <LoadingScreen onComplete={() => setLoaded(true)} />}
 
+      {/* Scale transition overlay */}
+      <ScaleTransition scale={scale} prevScale={prevScaleRef.current} />
+
       <ApodBackground />
 
       {isSolar && (
-        <SolarSystem
-          onPlanetSelect={handlePlanetSelect}
-          selectedPlanet={selectedPlanet}
-          timeScale={timeScale}
-        />
+        <SolarSystem onPlanetSelect={handlePlanetSelect} selectedPlanet={selectedPlanet} timeScale={timeScale} />
       )}
       {(isGalaxy || isDeepSpace) && (
         <GalaxyView
-          onStarSelect={handleStarSelect}
-          selectedStar={selectedStar}
-          onProceduralStarSelect={handleProceduralStarSelect}
-          selectedProceduralPos={proceduralPos}
+          onStarSelect={handleStarSelect} selectedStar={selectedStar}
+          onProceduralStarSelect={handleProceduralStarSelect} selectedProceduralPos={proceduralPos}
         />
       )}
 
       <ScaleNavigator currentScale={scale} onScaleChange={handleScaleChange} />
 
-      <Header
-        timeScale={timeScale}
-        setTimeScale={setTimeScale}
-        panels={panels}
-        togglePanel={togglePanel}
-        scale={scale}
-      />
+      <Header timeScale={timeScale} setTimeScale={setTimeScale} panels={panels} togglePanel={togglePanel} scale={scale} />
 
-      {/* === LEFT PANELS === */}
-      {isSolar && selectedPlanet && (
-        <PlanetDashboard planet={selectedPlanet} onClose={() => setSelectedPlanet(null)} />
-      )}
-      {isSolar && panels.asteroids && (
-        <AsteroidAlert onClose={() => closePanel('asteroids')} />
-      )}
-      {isSolar && panels.mars && (
-        <MarsGallery onClose={() => closePanel('mars')} />
-      )}
-      {isSolar && panels.missions && (
-        <MissionTimeline onClose={() => closePanel('missions')} />
-      )}
-      {(isGalaxy || isDeepSpace) && panels.exoplanets && (
-        <ExoplanetPanel onClose={() => closePanel('exoplanets')} />
-      )}
-      {isDeepSpace && panels.deepSpace && (
-        <DeepSpacePanel onClose={() => closePanel('deepSpace')} />
-      )}
+      {/* LEFT PANELS */}
+      {isSolar && selectedPlanet && <PlanetDashboard planet={selectedPlanet} onClose={() => setSelectedPlanet(null)} />}
+      {isSolar && panels.asteroids && <AsteroidAlert onClose={() => closePanel('asteroids')} />}
+      {isSolar && panels.mars && <MarsGallery onClose={() => closePanel('mars')} />}
+      {isSolar && panels.missions && <MissionTimeline onClose={() => closePanel('missions')} />}
+      {(isGalaxy || isDeepSpace) && panels.exoplanets && <ExoplanetPanel onClose={() => closePanel('exoplanets')} />}
+      {isDeepSpace && panels.deepSpace && <DeepSpacePanel onClose={() => closePanel('deepSpace')} />}
 
-      {/* === RIGHT PANELS === */}
+      {/* RIGHT PANELS */}
       {isGalaxy && selectedStar && !proceduralSystem && (
-        <StarInfoPanel
-          star={selectedStar}
-          onClose={() => setSelectedStar(null)}
-          onGoToSolarSystem={selectedStar.name === 'Sol' ? handleGoToSolarSystem : null}
-        />
+        <StarInfoPanel star={selectedStar} onClose={() => setSelectedStar(null)}
+          onGoToSolarSystem={selectedStar.name === 'Sol' ? handleGoToSolarSystem : null} />
       )}
       {(isGalaxy || isDeepSpace) && proceduralSystem && (
-        <StarSystemViewer
-          system={proceduralSystem}
-          onClose={() => { setProceduralSystem(null); setProceduralPos(null) }}
-        />
+        <StarSystemViewer system={proceduralSystem} onClose={() => { setProceduralSystem(null); setProceduralPos(null) }} />
       )}
-      {isSolar && panels.travel && (
-        <TravelCalculator planets={planets} onClose={() => closePanel('travel')} />
-      )}
-      {panels.iss && !proceduralSystem && (
-        <ISSTracker onClose={() => closePanel('iss')} />
-      )}
-      {panels.weather && !proceduralSystem && (
-        <SpaceWeatherPanel onClose={() => closePanel('weather')} />
-      )}
+      {isSolar && panels.travel && <TravelCalculator planets={planets} onClose={() => closePanel('travel')} />}
+      {panels.iss && !proceduralSystem && <ISSTracker onClose={() => closePanel('iss')} />}
+      {panels.weather && !proceduralSystem && <SpaceWeatherPanel onClose={() => closePanel('weather')} />}
 
-      {/* === CENTER PANELS === */}
-      {isSolar && panels.gravity && (
-        <GravitySimulator onClose={() => closePanel('gravity')} />
-      )}
-      {isSolar && panels.size && (
-        <SizeComparison onClose={() => closePanel('size')} />
-      )}
+      {/* CENTER PANELS */}
+      {isSolar && panels.gravity && <GravitySimulator onClose={() => closePanel('gravity')} />}
+      {isSolar && panels.size && <SizeComparison onClose={() => closePanel('size')} />}
 
-      {/* === GLOBAL === */}
+      {/* GLOBAL */}
       {panels.chat && <AIChatPanel onClose={() => closePanel('chat')} />}
       <AudioManager scale={scale} />
+
+      {/* Keyboard hint */}
+      <div className="absolute bottom-4 left-4 z-10 text-[9px] text-gray-700 pointer-events-none">
+        [1/2/3] Scale &middot; [Esc] Close &middot; [?] AI &middot; [I] ISS &middot; [W] Weather
+      </div>
     </div>
   )
 }
