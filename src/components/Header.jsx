@@ -1,6 +1,12 @@
 import { useState } from 'react'
 
-export default function Header({ timeScale, setTimeScale, showTravel, setShowTravel, showChat, setShowChat }) {
+export default function Header({
+  timeScale, setTimeScale,
+  showTravel, setShowTravel,
+  showChat, setShowChat,
+  showAsteroids, setShowAsteroids,
+  showMars, setShowMars,
+}) {
   const [showControls, setShowControls] = useState(false)
 
   return (
@@ -17,20 +23,36 @@ export default function Header({ timeScale, setTimeScale, showTravel, setShowTra
         </div>
 
         {/* Control Buttons */}
-        <div className="flex items-center gap-3 pointer-events-auto">
+        <div className="flex items-center gap-2 pointer-events-auto flex-wrap justify-end">
           {/* Time Scale Control */}
           <button
             onClick={() => setShowControls(!showControls)}
-            className="glass-panel px-4 py-2 rounded-lg text-sm hover:bg-white/10 transition-colors cursor-pointer"
+            className="glass-panel px-3 py-2 rounded-lg text-xs hover:bg-white/10 transition-colors cursor-pointer"
           >
             <span className="text-neon-cyan">TIME</span>
-            <span className="ml-2 text-white font-mono">{timeScale}x</span>
+            <span className="ml-1 text-white font-mono">{timeScale}x</span>
+          </button>
+
+          {/* Asteroids NEO */}
+          <button
+            onClick={setShowAsteroids}
+            className={`glass-panel px-3 py-2 rounded-lg text-xs transition-colors cursor-pointer ${showAsteroids ? 'bg-red-400/20 text-red-400' : 'hover:bg-white/10'}`}
+          >
+            NEO
+          </button>
+
+          {/* Mars Rover */}
+          <button
+            onClick={setShowMars}
+            className={`glass-panel px-3 py-2 rounded-lg text-xs transition-colors cursor-pointer ${showMars ? 'bg-neon-orange/20 text-neon-orange' : 'hover:bg-white/10'}`}
+          >
+            MARS
           </button>
 
           {/* Travel Calculator */}
           <button
             onClick={() => setShowTravel(!showTravel)}
-            className={`glass-panel px-4 py-2 rounded-lg text-sm transition-colors cursor-pointer ${showTravel ? 'bg-neon-cyan/20 text-neon-cyan' : 'hover:bg-white/10'}`}
+            className={`glass-panel px-3 py-2 rounded-lg text-xs transition-colors cursor-pointer ${showTravel ? 'bg-neon-cyan/20 text-neon-cyan' : 'hover:bg-white/10'}`}
           >
             TRAVEL
           </button>
@@ -38,7 +60,7 @@ export default function Header({ timeScale, setTimeScale, showTravel, setShowTra
           {/* AI Chat */}
           <button
             onClick={() => setShowChat(!showChat)}
-            className={`glass-panel px-4 py-2 rounded-lg text-sm transition-colors cursor-pointer ${showChat ? 'bg-neon-purple/20 text-neon-purple' : 'hover:bg-white/10'}`}
+            className={`glass-panel px-3 py-2 rounded-lg text-xs transition-colors cursor-pointer ${showChat ? 'bg-neon-purple/20 text-neon-purple' : 'hover:bg-white/10'}`}
           >
             AI GUIDE
           </button>
