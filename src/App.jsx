@@ -11,6 +11,11 @@ import ExoplanetPanel from './components/ExoplanetPanel'
 import DeepSpacePanel from './components/DeepSpacePanel'
 import StarInfoPanel from './components/StarInfoPanel'
 import ScaleNavigator from './components/ScaleNavigator'
+import ISSTracker from './components/ISSTracker'
+import SpaceWeatherPanel from './components/SpaceWeatherPanel'
+import GravitySimulator from './components/GravitySimulator'
+import SizeComparison from './components/SizeComparison'
+import MissionTimeline from './components/MissionTimeline'
 import LoadingScreen from './components/LoadingScreen'
 import AudioManager from './components/AudioManager'
 import Header from './components/Header'
@@ -18,31 +23,57 @@ import planets from './data/planets.json'
 
 function App() {
   const [loaded, setLoaded] = useState(false)
-  const [scale, setScale] = useState('solar') // solar | galaxy | deepspace
+  const [scale, setScale] = useState('solar')
   const [selectedPlanet, setSelectedPlanet] = useState(null)
   const [selectedStar, setSelectedStar] = useState(null)
-  const [showTravel, setShowTravel] = useState(false)
-  const [showChat, setShowChat] = useState(false)
-  const [showAsteroids, setShowAsteroids] = useState(false)
-  const [showMars, setShowMars] = useState(false)
-  const [showExoplanets, setShowExoplanets] = useState(false)
-  const [showDeepSpace, setShowDeepSpace] = useState(false)
   const [timeScale, setTimeScale] = useState(1)
 
-  // Close all left panels
-  const closeLeftPanels = useCallback(() => {
-    setSelectedPlanet(null)
-    setShowAsteroids(false)
-    setShowMars(false)
-    setShowExoplanets(false)
-    setShowDeepSpace(false)
+  // Panel visibility
+  const [panels, setPanels] = useState({
+    travel: false,
+    chat: false,
+    asteroids: false,
+    mars: false,
+    exoplanets: false,
+    deepSpace: false,
+    iss: false,
+    weather: false,
+    gravity: false,
+    size: false,
+    missions: false,
+  })
+
+  const togglePanel = useCallback((name) => {
+    setPanels((prev) => {
+      const next = { ...prev, [name]: !prev[name] }
+      // Close conflicting left panels
+      const leftPanels = ['asteroids', 'mars', 'exoplanets', 'deepSpace', 'missions']
+      if (leftPanels.includes(name) && next[name]) {
+        leftPanels.forEach((p) => { if (p !== name) next[p] = false })
+        setSelectedPlanet(null)
+      }
+      // Close conflicting right panels
+      const rightPanels = ['travel', 'iss', 'weather']
+      if (rightPanels.includes(name) && next[name]) {
+        rightPanels.forEach((p) => { if (p !== name) next[p] = false })
+      }
+      // Close conflicting center panels
+      const centerPanels = ['gravity', 'size']
+      if (centerPanels.includes(name) && next[name]) {
+        centerPanels.forEach((p) => { if (p !== name) next[p] = false })
+      }
+      return next
+    })
+  }, [])
+
+  const closePanel = useCallback((name) => {
+    setPanels((prev) => ({ ...prev, [name]: false }))
   }, [])
 
   const handlePlanetSelect = useCallback((planetId) => {
     const planet = planets.find(p => p.id === planetId)
     setSelectedPlanet(planet)
-    setShowAsteroids(false)
-    setShowMars(false)
+    setPanels((prev) => ({ ...prev, asteroids: false, mars: false, missions: false }))
   }, [])
 
   const handleStarSelect = useCallback((star) => {
@@ -50,138 +81,108 @@ function App() {
   }, [])
 
   const handleScaleChange = useCallback((newScale) => {
-    closeLeftPanels()
+    setSelectedPlanet(null)
     setSelectedStar(null)
-    setShowTravel(false)
+    setPanels((prev) => {
+      const next = { ...prev }
+      // Close scale-specific panels
+      Object.keys(next).forEach((k) => { if (k !== 'chat') next[k] = false })
+      if (newScale === 'deepspace') next.deepSpace = true
+      return next
+    })
     setScale(newScale)
-    // Auto-open relevant panel
-    if (newScale === 'deepspace') setShowDeepSpace(true)
-    if (newScale === 'galaxy') setShowExoplanets(false)
-  }, [closeLeftPanels])
+  }, [])
 
   const handleGoToSolarSystem = useCallback(() => {
     setScale('solar')
     setSelectedStar(null)
-    closeLeftPanels()
-  }, [closeLeftPanels])
-
-  const handleShowAsteroids = useCallback(() => {
-    setShowAsteroids(v => !v)
-    setShowMars(false)
-    setShowExoplanets(false)
-    setShowDeepSpace(false)
-    setSelectedPlanet(null)
+    setPanels((prev) => {
+      const next = { ...prev }
+      Object.keys(next).forEach((k) => { if (k !== 'chat') next[k] = false })
+      return next
+    })
   }, [])
 
-  const handleShowMars = useCallback(() => {
-    setShowMars(v => !v)
-    setShowAsteroids(false)
-    setShowExoplanets(false)
-    setShowDeepSpace(false)
-    setSelectedPlanet(null)
-  }, [])
-
-  const handleShowExoplanets = useCallback(() => {
-    setShowExoplanets(v => !v)
-    setShowAsteroids(false)
-    setShowMars(false)
-    setShowDeepSpace(false)
-    setSelectedPlanet(null)
-  }, [])
-
-  const handleShowDeepSpace = useCallback(() => {
-    setShowDeepSpace(v => !v)
-    setShowAsteroids(false)
-    setShowMars(false)
-    setShowExoplanets(false)
-    setSelectedPlanet(null)
-  }, [])
-
-  const isSolarMode = scale === 'solar'
-  const isGalaxyMode = scale === 'galaxy'
-  const isDeepSpaceMode = scale === 'deepspace'
+  const isSolar = scale === 'solar'
+  const isGalaxy = scale === 'galaxy'
+  const isDeepSpace = scale === 'deepspace'
 
   return (
     <div className="w-full h-full relative">
-      {/* Cinematic Loading Screen */}
       {!loaded && <LoadingScreen onComplete={() => setLoaded(true)} />}
 
-      {/* NASA APOD Background */}
       <ApodBackground />
 
-      {/* 3D Scenes — switch by scale */}
-      {isSolarMode && (
+      {/* 3D Scenes */}
+      {isSolar && (
         <SolarSystem
           onPlanetSelect={handlePlanetSelect}
           selectedPlanet={selectedPlanet}
           timeScale={timeScale}
         />
       )}
-
-      {(isGalaxyMode || isDeepSpaceMode) && (
-        <GalaxyView
-          onStarSelect={handleStarSelect}
-          selectedStar={selectedStar}
-        />
+      {(isGalaxy || isDeepSpace) && (
+        <GalaxyView onStarSelect={handleStarSelect} selectedStar={selectedStar} />
       )}
 
-      {/* Scale Navigator */}
       <ScaleNavigator currentScale={scale} onScaleChange={handleScaleChange} />
 
-      {/* UI Overlay — Header */}
       <Header
         timeScale={timeScale}
         setTimeScale={setTimeScale}
-        showTravel={showTravel}
-        setShowTravel={setShowTravel}
-        showChat={showChat}
-        setShowChat={setShowChat}
-        showAsteroids={showAsteroids}
-        setShowAsteroids={handleShowAsteroids}
-        showMars={showMars}
-        setShowMars={handleShowMars}
-        showExoplanets={showExoplanets}
-        setShowExoplanets={handleShowExoplanets}
-        showDeepSpace={showDeepSpace}
-        setShowDeepSpace={handleShowDeepSpace}
+        panels={panels}
+        togglePanel={togglePanel}
         scale={scale}
       />
 
-      {/* === SOLAR MODE PANELS === */}
-      {isSolarMode && selectedPlanet && (
+      {/* === LEFT PANELS === */}
+      {isSolar && selectedPlanet && (
         <PlanetDashboard planet={selectedPlanet} onClose={() => setSelectedPlanet(null)} />
       )}
-      {isSolarMode && showAsteroids && (
-        <AsteroidAlert onClose={() => setShowAsteroids(false)} />
+      {isSolar && panels.asteroids && (
+        <AsteroidAlert onClose={() => closePanel('asteroids')} />
       )}
-      {isSolarMode && showMars && (
-        <MarsGallery onClose={() => setShowMars(false)} />
+      {isSolar && panels.mars && (
+        <MarsGallery onClose={() => closePanel('mars')} />
       )}
-      {isSolarMode && showTravel && (
-        <TravelCalculator planets={planets} onClose={() => setShowTravel(false)} />
+      {isSolar && panels.missions && (
+        <MissionTimeline onClose={() => closePanel('missions')} />
+      )}
+      {(isGalaxy || isDeepSpace) && panels.exoplanets && (
+        <ExoplanetPanel onClose={() => closePanel('exoplanets')} />
+      )}
+      {isDeepSpace && panels.deepSpace && (
+        <DeepSpacePanel onClose={() => closePanel('deepSpace')} />
       )}
 
-      {/* === GALAXY MODE PANELS === */}
-      {isGalaxyMode && selectedStar && (
+      {/* === RIGHT PANELS === */}
+      {isGalaxy && selectedStar && (
         <StarInfoPanel
           star={selectedStar}
           onClose={() => setSelectedStar(null)}
           onGoToSolarSystem={selectedStar.name === 'Sol' ? handleGoToSolarSystem : null}
         />
       )}
-      {(isGalaxyMode || isDeepSpaceMode) && showExoplanets && (
-        <ExoplanetPanel onClose={() => setShowExoplanets(false)} />
+      {isSolar && panels.travel && (
+        <TravelCalculator planets={planets} onClose={() => closePanel('travel')} />
+      )}
+      {panels.iss && (
+        <ISSTracker onClose={() => closePanel('iss')} />
+      )}
+      {panels.weather && (
+        <SpaceWeatherPanel onClose={() => closePanel('weather')} />
       )}
 
-      {/* === DEEP SPACE PANELS === */}
-      {isDeepSpaceMode && showDeepSpace && (
-        <DeepSpacePanel onClose={() => setShowDeepSpace(false)} />
+      {/* === CENTER PANELS === */}
+      {isSolar && panels.gravity && (
+        <GravitySimulator onClose={() => closePanel('gravity')} />
+      )}
+      {isSolar && panels.size && (
+        <SizeComparison onClose={() => closePanel('size')} />
       )}
 
-      {/* === GLOBAL PANELS === */}
-      {showChat && <AIChatPanel onClose={() => setShowChat(false)} />}
-
-      {/* Ambient Space Audio */}
+      {/* === GLOBAL === */}
+      {panels.chat && <AIChatPanel onClose={() => closePanel('chat')} />}
       <AudioManager />
     </div>
   )
