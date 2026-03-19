@@ -24,6 +24,7 @@ import SkyTonightPanel from './components/SkyTonightPanel'
 import LoadingScreen from './components/LoadingScreen'
 import AudioManager from './components/AudioManager'
 import CanvasErrorBoundary from './components/CanvasErrorBoundary'
+import KeyboardOverlay from './components/KeyboardOverlay'
 import Header from './components/Header'
 import useKeyboardShortcuts from './hooks/useKeyboardShortcuts'
 import planets from './data/planets.json'
@@ -36,7 +37,8 @@ function App() {
   const [selectedStar, setSelectedStar] = useState(null)
   const [proceduralSystem, setProceduralSystem] = useState(null)
   const [proceduralPos, setProceduralPos] = useState(null)
-  const [viewingSystem3D, setViewingSystem3D] = useState(null) // The system being viewed in full 3D
+  const [viewingSystem3D, setViewingSystem3D] = useState(null)
+  const [showKeyboard, setShowKeyboard] = useState(false)
   const [timeScale, setTimeScale] = useState(1)
 
   const [panels, setPanels] = useState({
@@ -223,13 +225,16 @@ function App() {
           {panels.chat && <AIChatPanel onClose={() => closePanel('chat')} />}
 
           {/* Keyboard hint */}
-          <div className="absolute bottom-4 left-4 z-10 text-[9px] text-gray-700 pointer-events-none">
-            [1/2/3] Scale &middot; [Esc] Close &middot; [?] AI &middot; [I] ISS &middot; [W] Weather
+          <div className="absolute bottom-4 left-4 z-10 text-[9px] text-gray-700 pointer-events-auto">
+            <button onClick={() => setShowKeyboard(true)} className="hover:text-gray-400 transition-colors cursor-pointer">
+              [1/2/3] Scale &middot; [Esc] Close &middot; [?] AI &middot; Click for all shortcuts
+            </button>
           </div>
         </>
       )}
 
       <AudioManager scale={viewingSystem3D ? 'deepspace' : scale} />
+      <KeyboardOverlay show={showKeyboard} onClose={() => setShowKeyboard(false)} />
     </div>
   )
 }
