@@ -207,7 +207,7 @@ function SystemScene({ system }) {
         <ProceduralPlanet key={i} planet={planet} index={i} totalPlanets={system.planets.length} />
       ))}
 
-      <PostProcessing />
+      <PostProcessing mode="deepspace" />
     </>
   )
 }

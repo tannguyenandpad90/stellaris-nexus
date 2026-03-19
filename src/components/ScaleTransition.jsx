@@ -1,4 +1,5 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
+import WarpTransition from './WarpTransition'
 
 const MODE_TEXT = {
   solar: { title: 'SOLAR SYSTEM', subtitle: 'Our cosmic neighborhood', color: 'text-neon-orange' },
@@ -7,47 +8,46 @@ const MODE_TEXT = {
 }
 
 export default function ScaleTransition({ scale, prevScale }) {
-  const [visible, setVisible] = useState(false)
-  const [phase, setPhase] = useState('idle') // idle | in | show | out
+  const [warpActive, setWarpActive] = useState(false)
+  const [showText, setShowText] = useState(false)
+  const [textPhase, setTextPhase] = useState('idle')
 
   useEffect(() => {
     if (prevScale && prevScale !== scale) {
-      setVisible(true)
-      setPhase('in')
-      // Phase timeline: fade in (300ms) → show (800ms) → fade out (500ms)
-      const t1 = setTimeout(() => setPhase('show'), 300)
-      const t2 = setTimeout(() => setPhase('out'), 1100)
-      const t3 = setTimeout(() => { setPhase('idle'); setVisible(false) }, 1600)
-      return () => { clearTimeout(t1); clearTimeout(t2); clearTimeout(t3) }
+      setWarpActive(true)
     }
   }, [scale, prevScale])
 
-  if (!visible) return null
+  const handleWarpComplete = useCallback(() => {
+    setWarpActive(false)
+    setShowText(true)
+    setTextPhase('show')
+    const t1 = setTimeout(() => setTextPhase('out'), 800)
+    const t2 = setTimeout(() => { setTextPhase('idle'); setShowText(false) }, 1300)
+    return () => { clearTimeout(t1); clearTimeout(t2) }
+  }, [])
 
   const info = MODE_TEXT[scale] || MODE_TEXT.solar
 
   return (
-    <div
-      className={`fixed inset-0 z-[90] flex items-center justify-center pointer-events-none transition-opacity duration-300 ${
-        phase === 'in' ? 'opacity-100' : phase === 'show' ? 'opacity-100' : 'opacity-0'
-      }`}
-    >
-      {/* Background flash */}
-      <div className={`absolute inset-0 bg-black transition-opacity duration-300 ${
-        phase === 'in' ? 'opacity-70' : phase === 'show' ? 'opacity-50' : 'opacity-0'
-      }`} />
+    <>
+      <WarpTransition active={warpActive} onComplete={handleWarpComplete} />
 
-      {/* Text */}
-      <div className={`relative text-center transition-all duration-500 ${
-        phase === 'show' ? 'scale-100 opacity-100' : 'scale-90 opacity-0'
-      }`}>
-        <div className="w-20 h-px bg-gradient-to-r from-transparent via-white/30 to-transparent mx-auto mb-4" />
-        <h2 className={`font-[family-name:var(--font-orbitron)] text-4xl font-black tracking-[0.2em] ${info.color}`}>
-          {info.title}
-        </h2>
-        <p className="text-gray-400 text-sm tracking-[0.3em] uppercase mt-2">{info.subtitle}</p>
-        <div className="w-20 h-px bg-gradient-to-r from-transparent via-white/30 to-transparent mx-auto mt-4" />
-      </div>
-    </div>
+      {showText && (
+        <div
+          className={`fixed inset-0 flex items-center justify-center pointer-events-none transition-opacity duration-500 ${textPhase === 'show' ? 'opacity-100' : 'opacity-0'}`}
+          style={{ zIndex: 96 }}
+        >
+          <div className={`relative text-center transition-all duration-500 ${textPhase === 'show' ? 'scale-100' : 'scale-90'}`}>
+            <div className="w-20 h-px bg-gradient-to-r from-transparent via-white/30 to-transparent mx-auto mb-4" />
+            <h2 className={`font-[family-name:var(--font-orbitron)] text-4xl font-black tracking-[0.2em] ${info.color}`}>
+              {info.title}
+            </h2>
+            <p className="text-gray-400 text-sm tracking-[0.3em] uppercase mt-2">{info.subtitle}</p>
+            <div className="w-20 h-px bg-gradient-to-r from-transparent via-white/30 to-transparent mx-auto mt-4" />
+          </div>
+        </div>
+      )}
+    </>
   )
 }

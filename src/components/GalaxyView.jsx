@@ -242,7 +242,7 @@ function GalaxyScene({ onStarSelect, onProceduralStarSelect, selectedStar, selec
       {/* Camera fly-to */}
       <GalaxyCameraController targetPosition={selectedProceduralPos} controlsRef={controlsRef} />
 
-      <PostProcessing />
+      <PostProcessing mode="galaxy" />
     </>
   )
 }

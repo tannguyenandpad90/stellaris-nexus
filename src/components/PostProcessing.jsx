@@ -1,19 +1,27 @@
-import { EffectComposer, Bloom, Vignette } from '@react-three/postprocessing'
+import { EffectComposer, Bloom, Vignette, ChromaticAberration } from '@react-three/postprocessing'
+import { BlendFunction } from 'postprocessing'
+import * as THREE from 'three'
 
-export default function PostProcessing() {
+export default function PostProcessing({ mode = 'solar' }) {
+  const bloomIntensity = mode === 'galaxy' ? 2.0 : mode === 'deepspace' ? 1.8 : 1.5
+  const bloomRadius = mode === 'galaxy' ? 1.0 : 0.8
+
   return (
     <EffectComposer>
       <Bloom
-        intensity={1.5}
-        luminanceThreshold={0.2}
+        intensity={bloomIntensity}
+        luminanceThreshold={0.15}
         luminanceSmoothing={0.9}
         mipmapBlur
-        radius={0.8}
+        radius={bloomRadius}
       />
-      <Vignette
-        offset={0.3}
-        darkness={0.7}
+      <ChromaticAberration
+        blendFunction={BlendFunction.NORMAL}
+        offset={new THREE.Vector2(0.0004, 0.0004)}
+        radialModulation
+        modulationOffset={0.5}
       />
+      <Vignette offset={0.3} darkness={0.65} />
     </EffectComposer>
   )
 }

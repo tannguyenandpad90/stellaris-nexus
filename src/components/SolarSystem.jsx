@@ -49,7 +49,7 @@ function Scene({ onPlanetSelect, selectedPlanet, timeScale, planetPositions }) {
       ))}
 
       {/* Post-processing effects: Bloom + Vignette */}
-      <PostProcessing />
+      <PostProcessing mode="solar" />
     </>
   )
 }
