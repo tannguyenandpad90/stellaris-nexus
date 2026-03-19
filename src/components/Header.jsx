@@ -70,9 +70,11 @@ export default function Header({ timeScale, setTimeScale, panels, togglePanel, s
           )}
 
           {/* Global */}
+          <Btn active={panels.media} color="cyan" onClick={() => togglePanel('media')}>MEDIA</Btn>
           <Btn active={panels.iss} color="green" onClick={() => togglePanel('iss')}>ISS</Btn>
           <Btn active={panels.weather} color="yellow" onClick={() => togglePanel('weather')}>WEATHER</Btn>
-          <Btn active={panels.chat} color="purple" onClick={() => togglePanel('chat')}>AI GUIDE</Btn>
+          <Btn active={panels.sky} color="purple" onClick={() => togglePanel('sky')}>SKY</Btn>
+          <Btn active={panels.chat} color="purple" onClick={() => togglePanel('chat')}>AI</Btn>
         </div>
       </div>
 

@@ -19,6 +19,8 @@ import SpaceWeatherPanel from './components/SpaceWeatherPanel'
 import GravitySimulator from './components/GravitySimulator'
 import SizeComparison from './components/SizeComparison'
 import MissionTimeline from './components/MissionTimeline'
+import NasaMediaBrowser from './components/NasaMediaBrowser'
+import SkyTonightPanel from './components/SkyTonightPanel'
 import LoadingScreen from './components/LoadingScreen'
 import AudioManager from './components/AudioManager'
 import CanvasErrorBoundary from './components/CanvasErrorBoundary'
@@ -40,18 +42,18 @@ function App() {
   const [panels, setPanels] = useState({
     travel: false, chat: false, asteroids: false, mars: false,
     exoplanets: false, deepSpace: false, iss: false, weather: false,
-    gravity: false, size: false, missions: false,
+    gravity: false, size: false, missions: false, media: false, sky: false,
   })
 
   const togglePanel = useCallback((name) => {
     setPanels((prev) => {
       const next = { ...prev, [name]: !prev[name] }
-      const leftPanels = ['asteroids', 'mars', 'exoplanets', 'deepSpace', 'missions']
+      const leftPanels = ['asteroids', 'mars', 'exoplanets', 'deepSpace', 'missions', 'media']
       if (leftPanels.includes(name) && next[name]) {
         leftPanels.forEach((p) => { if (p !== name) next[p] = false })
         setSelectedPlanet(null)
       }
-      const rightPanels = ['travel', 'iss', 'weather']
+      const rightPanels = ['travel', 'iss', 'weather', 'sky']
       if (rightPanels.includes(name) && next[name]) {
         rightPanels.forEach((p) => { if (p !== name) next[p] = false })
       }
@@ -194,6 +196,7 @@ function App() {
           {isSolar && panels.missions && <MissionTimeline onClose={() => closePanel('missions')} />}
           {(isGalaxy || isDeepSpace) && panels.exoplanets && <ExoplanetPanel onClose={() => closePanel('exoplanets')} />}
           {isDeepSpace && panels.deepSpace && <DeepSpacePanel onClose={() => closePanel('deepSpace')} />}
+          {panels.media && <NasaMediaBrowser onClose={() => closePanel('media')} />}
 
           {/* RIGHT PANELS */}
           {isGalaxy && selectedStar && !proceduralSystem && (
@@ -210,6 +213,7 @@ function App() {
           {isSolar && panels.travel && <TravelCalculator planets={planets} onClose={() => closePanel('travel')} />}
           {panels.iss && !proceduralSystem && <ISSTracker onClose={() => closePanel('iss')} />}
           {panels.weather && !proceduralSystem && <SpaceWeatherPanel onClose={() => closePanel('weather')} />}
+          {panels.sky && <SkyTonightPanel onClose={() => closePanel('sky')} />}
 
           {/* CENTER PANELS */}
           {isSolar && panels.gravity && <GravitySimulator onClose={() => closePanel('gravity')} />}
