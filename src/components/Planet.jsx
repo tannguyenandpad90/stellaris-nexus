@@ -1,4 +1,4 @@
-import { useRef, useState, useMemo } from 'react'
+import { useRef, useState, useMemo, memo } from 'react'
 import { useFrame } from '@react-three/fiber'
 import { Html, Ring } from '@react-three/drei'
 import * as THREE from 'three'
@@ -14,106 +14,221 @@ const ATMOSPHERE_CONFIG = {
   neptune: { color: '#3f54ba', intensity: 0.45 },
 }
 
-function makeTexture(data) {
+// High-quality planet textures — generated once, cached globally
+const textureCache = new Map()
+
+function getTexture(data) {
+  if (textureCache.has(data.id)) return textureCache.get(data.id)
+
   const canvas = document.createElement('canvas')
-  canvas.width = 512
-  canvas.height = 256
+  canvas.width = 1024
+  canvas.height = 512
   const ctx = canvas.getContext('2d')
   const base = new THREE.Color(data.color)
 
+  // Base fill
   ctx.fillStyle = data.color
-  ctx.fillRect(0, 0, 512, 256)
+  ctx.fillRect(0, 0, 1024, 512)
 
-  for (let i = 0; i < 5000; i++) {
-    const x = Math.random() * 512, y = Math.random() * 256
-    const r = Math.random() * 3 + 0.5
-    const c = base.clone().multiplyScalar(0.7 + Math.random() * 0.6)
-    ctx.fillStyle = `rgb(${Math.floor(c.r * 255)},${Math.floor(c.g * 255)},${Math.floor(c.b * 255)})`
-    ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill()
+  // Multi-layered noise for realistic surface
+  for (let layer = 0; layer < 3; layer++) {
+    const dotCount = [3000, 2000, 1000][layer]
+    const sizeRange = [{ min: 1, max: 4 }, { min: 2, max: 6 }, { min: 4, max: 10 }][layer]
+    const brightRange = [{ min: 0.6, max: 1.3 }, { min: 0.4, max: 1.0 }, { min: 0.7, max: 1.1 }][layer]
+
+    for (let i = 0; i < dotCount; i++) {
+      const x = Math.random() * 1024, y = Math.random() * 512
+      const r = sizeRange.min + Math.random() * (sizeRange.max - sizeRange.min)
+      const b = brightRange.min + Math.random() * (brightRange.max - brightRange.min)
+      const c = base.clone().multiplyScalar(b)
+      ctx.globalAlpha = 0.3 + Math.random() * 0.4
+      ctx.fillStyle = `rgb(${Math.floor(c.r * 255)},${Math.floor(c.g * 255)},${Math.floor(c.b * 255)})`
+      ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill()
+    }
   }
+  ctx.globalAlpha = 1
 
+  // Gas giant bands with turbulence
   if (['jupiter', 'saturn', 'uranus', 'neptune'].includes(data.id)) {
-    for (let i = 0; i < 14; i++) {
-      const y = (i / 14) * 256
-      const bc = base.clone().multiplyScalar(0.5 + Math.random() * 0.5)
-      ctx.fillStyle = `rgba(${Math.floor(bc.r * 255)},${Math.floor(bc.g * 255)},${Math.floor(bc.b * 255)},0.35)`
-      ctx.fillRect(0, y, 512, 5 + Math.random() * 14)
+    for (let i = 0; i < 18; i++) {
+      const y = (i / 18) * 512
+      const bc = base.clone().multiplyScalar(0.4 + Math.random() * 0.6)
+      const h = 4 + Math.random() * 20
+      // Wavy bands
+      ctx.fillStyle = `rgba(${Math.floor(bc.r * 255)},${Math.floor(bc.g * 255)},${Math.floor(bc.b * 255)},0.3)`
+      ctx.beginPath()
+      ctx.moveTo(0, y)
+      for (let x = 0; x <= 1024; x += 16) {
+        ctx.lineTo(x, y + Math.sin(x * 0.02 + i) * 5)
+      }
+      ctx.lineTo(1024, y + h)
+      for (let x = 1024; x >= 0; x -= 16) {
+        ctx.lineTo(x, y + h + Math.sin(x * 0.02 + i + 1) * 3)
+      }
+      ctx.closePath()
+      ctx.fill()
     }
+    // Jupiter Great Red Spot
     if (data.id === 'jupiter') {
-      const g = ctx.createRadialGradient(350, 150, 5, 350, 150, 28)
-      g.addColorStop(0, 'rgba(180, 60, 20, 0.8)'); g.addColorStop(1, 'rgba(200, 100, 50, 0)')
-      ctx.fillStyle = g; ctx.beginPath(); ctx.ellipse(350, 150, 28, 18, 0, 0, Math.PI * 2); ctx.fill()
+      const g = ctx.createRadialGradient(700, 300, 8, 700, 300, 50)
+      g.addColorStop(0, 'rgba(180, 50, 15, 0.9)')
+      g.addColorStop(0.5, 'rgba(200, 80, 40, 0.5)')
+      g.addColorStop(1, 'rgba(200, 100, 60, 0)')
+      ctx.fillStyle = g; ctx.beginPath(); ctx.ellipse(700, 300, 55, 35, 0.1, 0, Math.PI * 2); ctx.fill()
+      // Swirl lines around the spot
+      for (let a = 0; a < Math.PI * 2; a += 0.3) {
+        ctx.strokeStyle = `rgba(150, 60, 20, ${0.2 + Math.random() * 0.2})`
+        ctx.lineWidth = 1
+        const r1 = 40 + Math.random() * 20
+        ctx.beginPath()
+        ctx.arc(700, 300, r1, a, a + 0.8)
+        ctx.stroke()
+      }
+    }
+    // Neptune's Great Dark Spot
+    if (data.id === 'neptune') {
+      const g = ctx.createRadialGradient(500, 240, 5, 500, 240, 35)
+      g.addColorStop(0, 'rgba(20, 30, 80, 0.8)')
+      g.addColorStop(1, 'rgba(40, 50, 120, 0)')
+      ctx.fillStyle = g; ctx.beginPath(); ctx.ellipse(500, 240, 40, 25, 0, 0, Math.PI * 2); ctx.fill()
     }
   }
 
+  // Earth: detailed continents + oceans
   if (data.id === 'earth') {
-    ctx.fillStyle = 'rgba(30, 80, 160, 0.3)'; ctx.fillRect(0, 0, 512, 256)
-    for (let i = 0; i < 15; i++) {
-      ctx.fillStyle = `rgba(${60 + Math.random() * 60}, ${100 + Math.random() * 50}, ${40 + Math.random() * 30}, 0.5)`
-      ctx.beginPath(); ctx.ellipse(Math.random() * 512, 40 + Math.random() * 176, 20 + Math.random() * 40, 15 + Math.random() * 30, Math.random() * Math.PI, 0, Math.PI * 2); ctx.fill()
-    }
-    ctx.fillStyle = 'rgba(220, 230, 240, 0.6)'; ctx.fillRect(0, 0, 512, 20); ctx.fillRect(0, 236, 512, 20)
+    ctx.fillStyle = 'rgba(20, 60, 140, 0.35)'; ctx.fillRect(0, 0, 1024, 512)
+    // Continents (more detailed shapes)
+    const landAreas = [
+      { cx: 500, cy: 180, rx: 80, ry: 60 },  // Eurasia
+      { cx: 550, cy: 280, rx: 40, ry: 50 },  // Africa
+      { cx: 250, cy: 200, rx: 60, ry: 80 },  // Americas N
+      { cx: 280, cy: 330, rx: 35, ry: 70 },  // Americas S
+      { cx: 700, cy: 370, rx: 60, ry: 30 },  // Australia
+      { cx: 520, cy: 140, rx: 90, ry: 30 },  // Russia
+    ]
+    landAreas.forEach(({ cx, cy, rx, ry }) => {
+      for (let j = 0; j < 8; j++) {
+        const ox = cx + (Math.random() - 0.5) * rx
+        const oy = cy + (Math.random() - 0.5) * ry
+        ctx.fillStyle = `rgba(${50 + Math.random() * 50}, ${90 + Math.random() * 60}, ${30 + Math.random() * 30}, 0.6)`
+        ctx.beginPath(); ctx.ellipse(ox, oy, 10 + Math.random() * rx * 0.4, 8 + Math.random() * ry * 0.3, Math.random(), 0, Math.PI * 2); ctx.fill()
+      }
+    })
+    // Ice caps
+    ctx.fillStyle = 'rgba(220, 235, 245, 0.7)'; ctx.fillRect(0, 0, 1024, 35); ctx.fillRect(0, 477, 1024, 35)
+    // Desert regions
+    ctx.fillStyle = 'rgba(200, 170, 100, 0.3)'; ctx.beginPath(); ctx.ellipse(540, 260, 50, 20, 0, 0, Math.PI * 2); ctx.fill()
   }
+
+  // Mars: craters + Valles Marineris + Olympus Mons
   if (data.id === 'mars') {
-    for (let i = 0; i < 10; i++) {
-      ctx.fillStyle = `rgba(${80 + Math.random() * 40}, ${30 + Math.random() * 20}, 10, 0.4)`
-      ctx.beginPath(); ctx.arc(Math.random() * 512, Math.random() * 256, 10 + Math.random() * 30, 0, Math.PI * 2); ctx.fill()
+    for (let i = 0; i < 25; i++) {
+      const cx = Math.random() * 1024, cy = Math.random() * 512
+      const r = 8 + Math.random() * 40
+      ctx.strokeStyle = `rgba(60, 20, 5, ${0.3 + Math.random() * 0.3})`
+      ctx.lineWidth = 1.5
+      ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.stroke()
+      ctx.fillStyle = `rgba(90, 40, 15, 0.2)`; ctx.fill()
     }
-    ctx.fillStyle = 'rgba(200, 210, 220, 0.5)'; ctx.fillRect(0, 0, 512, 12)
+    // Valles Marineris (canyon)
+    ctx.strokeStyle = 'rgba(80, 30, 10, 0.5)'; ctx.lineWidth = 4
+    ctx.beginPath(); ctx.moveTo(300, 260); ctx.bezierCurveTo(450, 255, 550, 270, 700, 265); ctx.stroke()
+    // Olympus Mons
+    const om = ctx.createRadialGradient(400, 180, 5, 400, 180, 40)
+    om.addColorStop(0, 'rgba(170, 90, 50, 0.6)'); om.addColorStop(1, 'rgba(150, 70, 30, 0)')
+    ctx.fillStyle = om; ctx.beginPath(); ctx.arc(400, 180, 40, 0, Math.PI * 2); ctx.fill()
+    // Polar cap
+    ctx.fillStyle = 'rgba(210, 220, 230, 0.6)'; ctx.fillRect(0, 0, 1024, 25)
+  }
+
+  // Venus: thick cloud bands
+  if (data.id === 'venus') {
+    for (let i = 0; i < 12; i++) {
+      const y = (i / 12) * 512
+      ctx.fillStyle = `rgba(200, 180, 130, ${0.15 + Math.random() * 0.15})`
+      ctx.fillRect(0, y, 1024, 20 + Math.random() * 25)
+    }
+  }
+
+  // Mercury: heavy cratering
+  if (data.id === 'mercury') {
+    for (let i = 0; i < 40; i++) {
+      const cx = Math.random() * 1024, cy = Math.random() * 512
+      const r = 5 + Math.random() * 25
+      ctx.strokeStyle = `rgba(60, 50, 40, ${0.3 + Math.random() * 0.3})`
+      ctx.lineWidth = 1
+      ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.stroke()
+      // Crater shadow
+      ctx.fillStyle = `rgba(40, 35, 30, 0.15)`; ctx.fill()
+    }
   }
 
   const tex = new THREE.CanvasTexture(canvas)
   tex.wrapS = THREE.RepeatWrapping; tex.wrapT = THREE.RepeatWrapping
+  tex.anisotropy = 4
+  textureCache.set(data.id, tex)
   return tex
 }
 
-function makeCloudTexture() {
+// Cloud texture — cached globally
+let cloudTexCache = null
+function getCloudTexture() {
+  if (cloudTexCache) return cloudTexCache
   const canvas = document.createElement('canvas')
-  canvas.width = 512; canvas.height = 256
+  canvas.width = 1024; canvas.height = 512
   const ctx = canvas.getContext('2d')
-  ctx.clearRect(0, 0, 512, 256)
-  for (let i = 0; i < 40; i++) {
-    const x = Math.random() * 512, y = Math.random() * 256
-    const rx = 30 + Math.random() * 60, ry = 10 + Math.random() * 20
+  ctx.clearRect(0, 0, 1024, 512)
+  // Realistic cloud patterns
+  for (let i = 0; i < 60; i++) {
+    const x = Math.random() * 1024, y = Math.random() * 512
+    const rx = 40 + Math.random() * 100, ry = 15 + Math.random() * 30
     const g = ctx.createRadialGradient(x, y, 0, x, y, rx)
-    g.addColorStop(0, `rgba(255,255,255,${0.15 + Math.random() * 0.2})`)
+    g.addColorStop(0, `rgba(255,255,255,${0.1 + Math.random() * 0.15})`)
+    g.addColorStop(0.7, `rgba(255,255,255,${Math.random() * 0.05})`)
     g.addColorStop(1, 'rgba(255,255,255,0)')
     ctx.fillStyle = g; ctx.beginPath(); ctx.ellipse(x, y, rx, ry, Math.random(), 0, Math.PI * 2); ctx.fill()
   }
-  const tex = new THREE.CanvasTexture(canvas)
-  tex.wrapS = THREE.RepeatWrapping; tex.wrapT = THREE.RepeatWrapping
-  return tex
+  cloudTexCache = new THREE.CanvasTexture(canvas)
+  cloudTexCache.wrapS = THREE.RepeatWrapping; cloudTexCache.wrapT = THREE.RepeatWrapping
+  return cloudTexCache
 }
 
-function makeNightTexture() {
+// Night texture — cached globally
+let nightTexCache = null
+function getNightTexture() {
+  if (nightTexCache) return nightTexCache
   const canvas = document.createElement('canvas')
-  canvas.width = 512; canvas.height = 256
+  canvas.width = 1024; canvas.height = 512
   const ctx = canvas.getContext('2d')
-  ctx.fillStyle = '#000'; ctx.fillRect(0, 0, 512, 256)
-  // City lights clusters
-  const cities = [[100, 90], [150, 100], [200, 85], [250, 110], [300, 95], [350, 130], [400, 100], [130, 170], [280, 150], [380, 140], [180, 130], [320, 90], [420, 120], [80, 140], [450, 105]]
+  ctx.fillStyle = '#000'; ctx.fillRect(0, 0, 1024, 512)
+  const cities = [
+    [200, 180], [300, 200], [400, 170], [500, 220], [600, 190], [700, 260],
+    [800, 200], [260, 340], [560, 300], [760, 280], [360, 260], [640, 180],
+    [840, 240], [160, 280], [900, 210], [450, 145], [680, 150], [100, 200],
+  ]
   cities.forEach(([cx, cy]) => {
-    for (let i = 0; i < 30; i++) {
-      const x = cx + (Math.random() - 0.5) * 30
-      const y = cy + (Math.random() - 0.5) * 15
-      ctx.fillStyle = `rgba(255, ${200 + Math.random() * 55}, ${100 + Math.random() * 100}, ${0.5 + Math.random() * 0.5})`
-      ctx.fillRect(x, y, 1, 1)
+    for (let i = 0; i < 50; i++) {
+      const x = cx + (Math.random() - 0.5) * 50
+      const y = cy + (Math.random() - 0.5) * 25
+      const brightness = 0.4 + Math.random() * 0.6
+      ctx.fillStyle = `rgba(255, ${180 + Math.random() * 75}, ${80 + Math.random() * 120}, ${brightness})`
+      ctx.fillRect(x, y, Math.random() > 0.5 ? 2 : 1, 1)
     }
   })
-  const tex = new THREE.CanvasTexture(canvas)
-  tex.wrapS = THREE.RepeatWrapping; tex.wrapT = THREE.RepeatWrapping
-  return tex
+  nightTexCache = new THREE.CanvasTexture(canvas)
+  nightTexCache.wrapS = THREE.RepeatWrapping; nightTexCache.wrapT = THREE.RepeatWrapping
+  return nightTexCache
 }
 
-export default function Planet({ data, timeScale, isSelected, onClick }) {
+const Planet = memo(function Planet({ data, timeScale, isSelected, onClick }) {
   const groupRef = useRef()
   const meshRef = useRef()
   const cloudRef = useRef()
   const [hovered, setHovered] = useState(false)
 
-  const texture = useMemo(() => makeTexture(data), [data.id, data.color])
-  const cloudTex = useMemo(() => data.id === 'earth' ? makeCloudTexture() : null, [data.id])
-  const nightTex = useMemo(() => data.id === 'earth' ? makeNightTexture() : null, [data.id])
+  const texture = useMemo(() => getTexture(data), [data.id])
+  const cloudTex = useMemo(() => data.id === 'earth' ? getCloudTexture() : null, [data.id])
+  const nightTex = useMemo(() => data.id === 'earth' ? getNightTexture() : null, [data.id])
 
   useFrame((state) => {
     if (!groupRef.current) return
@@ -130,6 +245,7 @@ export default function Planet({ data, timeScale, isSelected, onClick }) {
 
   return (
     <group ref={groupRef}>
+      {/* Main planet — 48 segments (from 64) */}
       <mesh
         ref={meshRef}
         onClick={(e) => { e.stopPropagation(); onClick() }}
@@ -137,54 +253,54 @@ export default function Planet({ data, timeScale, isSelected, onClick }) {
         onPointerOut={() => { setHovered(false); document.body.style.cursor = 'default' }}
         scale={scale}
       >
-        <sphereGeometry args={[data.radius, 64, 64]} />
-        <meshStandardMaterial map={texture} roughness={0.8} metalness={0.1} />
+        <sphereGeometry args={[data.radius, 48, 48]} />
+        <meshStandardMaterial map={texture} roughness={0.75} metalness={0.1} />
       </mesh>
 
-      {/* Earth clouds */}
-      {data.id === 'earth' && cloudTex && (
-        <mesh ref={cloudRef} scale={scale * 1.01}>
-          <sphereGeometry args={[data.radius, 48, 48]} />
-          <meshStandardMaterial map={cloudTex} transparent opacity={0.45} depthWrite={false} />
+      {/* Earth clouds — 32 segments */}
+      {cloudTex && (
+        <mesh ref={cloudRef} scale={scale * 1.008}>
+          <sphereGeometry args={[data.radius, 32, 32]} />
+          <meshStandardMaterial map={cloudTex} transparent opacity={0.4} depthWrite={false} />
         </mesh>
       )}
 
-      {/* Earth night lights */}
-      {data.id === 'earth' && nightTex && (
-        <mesh scale={scale * 1.001} rotation={meshRef.current?.rotation}>
-          <sphereGeometry args={[data.radius, 48, 48]} />
-          <meshBasicMaterial map={nightTex} transparent opacity={0.7} blending={THREE.AdditiveBlending} depthWrite={false} />
+      {/* Earth night lights — uses same mesh rotation */}
+      {nightTex && (
+        <mesh scale={scale * 1.001}>
+          <sphereGeometry args={[data.radius, 32, 32]} />
+          <meshBasicMaterial map={nightTex} transparent opacity={0.6} blending={THREE.AdditiveBlending} depthWrite={false} />
         </mesh>
       )}
 
-      {/* Atmosphere */}
+      {/* Atmosphere glow */}
       {atmo && <Atmosphere radius={data.radius} color={atmo.color} intensity={atmo.intensity} />}
 
       {/* Saturn rings */}
       {data.id === 'saturn' && (
         <group rotation={[Math.PI * 0.4, 0, 0]}>
-          <Ring args={[data.radius * 1.4, data.radius * 1.8, 64]}><meshBasicMaterial color="#d4c48a" transparent opacity={0.5} side={THREE.DoubleSide} /></Ring>
-          <Ring args={[data.radius * 1.85, data.radius * 2.2, 64]}><meshBasicMaterial color="#b8a870" transparent opacity={0.35} side={THREE.DoubleSide} /></Ring>
-          <Ring args={[data.radius * 2.25, data.radius * 2.4, 64]}><meshBasicMaterial color="#9e9060" transparent opacity={0.2} side={THREE.DoubleSide} /></Ring>
+          <Ring args={[data.radius * 1.4, data.radius * 1.8, 48]}><meshBasicMaterial color="#d4c48a" transparent opacity={0.5} side={THREE.DoubleSide} /></Ring>
+          <Ring args={[data.radius * 1.85, data.radius * 2.2, 48]}><meshBasicMaterial color="#b8a870" transparent opacity={0.35} side={THREE.DoubleSide} /></Ring>
+          <Ring args={[data.radius * 2.25, data.radius * 2.4, 32]}><meshBasicMaterial color="#9e9060" transparent opacity={0.2} side={THREE.DoubleSide} /></Ring>
         </group>
       )}
 
       {/* Uranus rings */}
       {data.id === 'uranus' && (
-        <Ring args={[data.radius * 1.5, data.radius * 1.7, 64]} rotation={[Math.PI * 0.5, Math.PI * 0.45, 0]}>
+        <Ring args={[data.radius * 1.5, data.radius * 1.7, 32]} rotation={[Math.PI * 0.5, Math.PI * 0.45, 0]}>
           <meshBasicMaterial color="#9ecfe0" transparent opacity={0.15} side={THREE.DoubleSide} />
         </Ring>
       )}
 
-      {/* Selection glow */}
+      {/* Selection glow — 16 segments (cheap) */}
       {(hovered || isSelected) && (
         <mesh scale={1.2}>
-          <sphereGeometry args={[data.radius * 1.15, 32, 32]} />
+          <sphereGeometry args={[data.radius * 1.15, 16, 16]} />
           <meshBasicMaterial color={isSelected ? '#00f5ff' : '#ffffff'} transparent opacity={isSelected ? 0.15 : 0.08} side={THREE.BackSide} />
         </mesh>
       )}
 
-      {/* Label with extra info on hover */}
+      {/* Enhanced label */}
       {(hovered || isSelected) && (
         <Html position={[0, data.radius + 0.8, 0]} center distanceFactor={15} style={{ pointerEvents: 'none' }}>
           <div className="text-center">
@@ -201,4 +317,6 @@ export default function Planet({ data, timeScale, isSelected, onClick }) {
       )}
     </group>
   )
-}
+})
+
+export default Planet

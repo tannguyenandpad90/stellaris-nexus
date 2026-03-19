@@ -37,7 +37,7 @@ export default function Atmosphere({ radius, color = '#4a90d9', intensity = 0.6 
 
   return (
     <mesh material={material} scale={1.15}>
-      <sphereGeometry args={[radius, 32, 32]} />
+      <sphereGeometry args={[radius, 20, 20]} />
     </mesh>
   )
 }
