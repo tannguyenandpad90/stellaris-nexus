@@ -1,22 +1,13 @@
 import { Canvas } from '@react-three/fiber'
 import { OrbitControls, Stars } from '@react-three/drei'
-import { Suspense, useRef } from 'react'
+import { Suspense } from 'react'
 import Sun from './Sun'
 import Planet from './Planet'
 import OrbitRing from './OrbitRing'
 import AsteroidBelt3D from './AsteroidBelt3D'
-import CameraController from './CameraController'
 import PostProcessing from './PostProcessing'
+import Scene3DLoader from './Scene3DLoader'
 import planets from '../data/planets.json'
-
-function LoadingFallback() {
-  return (
-    <mesh>
-      <sphereGeometry args={[1, 16, 16]} />
-      <meshBasicMaterial color="#00f5ff" wireframe />
-    </mesh>
-  )
-}
 
 function Scene({ onPlanetSelect, selectedPlanet, timeScale, planetPositions }) {
   return (
@@ -73,7 +64,7 @@ export default function SolarSystem({ onPlanetSelect, selectedPlanet, timeScale 
     >
       <color attach="background" args={['#040410']} />
 
-      <Suspense fallback={<LoadingFallback />}>
+      <Suspense fallback={<Scene3DLoader label="Solar System" />}>
         <Scene
           onPlanetSelect={onPlanetSelect}
           selectedPlanet={selectedPlanet}

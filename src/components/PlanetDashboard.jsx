@@ -1,4 +1,4 @@
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, RadarChart, PolarGrid, PolarAngleAxis, Radar } from 'recharts'
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts'
 import planets from '../data/planets.json'
 
 const CustomTooltip = ({ active, payload, label }) => {
@@ -108,7 +108,7 @@ export default function PlanetDashboard({ planet, onClose }) {
                 <Tooltip content={<CustomTooltip />} />
                 <Bar dataKey="gravity" radius={[3, 3, 0, 0]}>
                   {gravityData.map((entry, index) => (
-                    <rect key={index} fill={entry.fill} />
+                    <Cell key={index} fill={entry.fill} />
                   ))}
                 </Bar>
               </BarChart>

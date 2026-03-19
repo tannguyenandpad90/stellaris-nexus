@@ -21,6 +21,7 @@ import SizeComparison from './components/SizeComparison'
 import MissionTimeline from './components/MissionTimeline'
 import LoadingScreen from './components/LoadingScreen'
 import AudioManager from './components/AudioManager'
+import CanvasErrorBoundary from './components/CanvasErrorBoundary'
 import Header from './components/Header'
 import useKeyboardShortcuts from './hooks/useKeyboardShortcuts'
 import planets from './data/planets.json'
@@ -158,7 +159,9 @@ function App() {
 
       {/* === 3D Star System View (fullscreen overlay) === */}
       {viewingSystem3D && (
-        <StarSystem3D system={viewingSystem3D} onBack={handleExitSystem3D} />
+        <CanvasErrorBoundary label="Star System 3D">
+          <StarSystem3D system={viewingSystem3D} onBack={handleExitSystem3D} />
+        </CanvasErrorBoundary>
       )}
 
       {/* Main scenes (hidden when viewing a star system) */}
@@ -167,13 +170,17 @@ function App() {
           <ApodBackground />
 
           {isSolar && (
-            <SolarSystem onPlanetSelect={handlePlanetSelect} selectedPlanet={selectedPlanet} timeScale={timeScale} />
+            <CanvasErrorBoundary label="Solar System">
+              <SolarSystem onPlanetSelect={handlePlanetSelect} selectedPlanet={selectedPlanet} timeScale={timeScale} />
+            </CanvasErrorBoundary>
           )}
           {(isGalaxy || isDeepSpace) && (
-            <GalaxyView
-              onStarSelect={handleStarSelect} selectedStar={selectedStar}
-              onProceduralStarSelect={handleProceduralStarSelect} selectedProceduralPos={proceduralPos}
-            />
+            <CanvasErrorBoundary label="Galaxy View">
+              <GalaxyView
+                onStarSelect={handleStarSelect} selectedStar={selectedStar}
+                onProceduralStarSelect={handleProceduralStarSelect} selectedProceduralPos={proceduralPos}
+              />
+            </CanvasErrorBoundary>
           )}
 
           <ScaleNavigator currentScale={scale} onScaleChange={handleScaleChange} />
