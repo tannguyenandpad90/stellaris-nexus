@@ -101,7 +101,7 @@ function MiniOrrery({ system }) {
   )
 }
 
-export default function StarSystemViewer({ system, onClose, onEnterSystem }) {
+export default function StarSystemViewer({ system, onClose, onEnterSystem, onShowEvolution }) {
   const [expandedPlanet, setExpandedPlanet] = useState(null)
 
   if (!system) return null
@@ -197,17 +197,23 @@ export default function StarSystemViewer({ system, onClose, onEnterSystem }) {
           ))}
         </div>
 
-        {/* Enter 3D System */}
-        {system.numPlanets > 0 && (
-          <div className="px-4 py-2 border-t border-panel-border shrink-0">
+        {/* Actions */}
+        <div className="px-4 py-2 border-t border-panel-border shrink-0 flex gap-2">
+          {system.numPlanets > 0 && (
             <button
               onClick={() => onEnterSystem?.(system)}
-              className="w-full glass-panel rounded-lg px-4 py-2.5 text-sm text-neon-cyan hover:bg-neon-cyan/10 transition-colors cursor-pointer border border-neon-cyan/30 font-[family-name:var(--font-orbitron)] tracking-wider"
+              className="flex-1 glass-panel rounded-lg px-3 py-2 text-xs text-neon-cyan hover:bg-neon-cyan/10 transition-colors cursor-pointer border border-neon-cyan/30 font-[family-name:var(--font-orbitron)] tracking-wider"
             >
-              EXPLORE IN 3D →
+              3D VIEW →
             </button>
-          </div>
-        )}
+          )}
+          <button
+            onClick={() => onShowEvolution?.()}
+            className="flex-1 glass-panel rounded-lg px-3 py-2 text-xs text-neon-orange hover:bg-neon-orange/10 transition-colors cursor-pointer border border-neon-orange/30 font-[family-name:var(--font-orbitron)] tracking-wider"
+          >
+            EVOLUTION
+          </button>
+        </div>
 
         {/* Footer */}
         <div className="px-4 py-2 border-t border-panel-border shrink-0">

@@ -58,6 +58,7 @@ export default function Header({ timeScale, setTimeScale, panels, togglePanel, s
               <Btn active={panels.gravity} color="cyan" onClick={() => togglePanel('gravity')}>GRAVITY</Btn>
               <Btn active={panels.size} color="orange" onClick={() => togglePanel('size')}>SIZE</Btn>
               <Btn active={panels.missions} color="blue" onClick={() => togglePanel('missions')}>MISSIONS</Btn>
+              <Btn active={panels.launch} color="cyan" onClick={() => togglePanel('launch')}>LAUNCH</Btn>
             </>
           )}
 
@@ -70,6 +71,7 @@ export default function Header({ timeScale, setTimeScale, panels, togglePanel, s
           )}
 
           {/* Global */}
+          <Btn active={panels.cosmic} color="orange" onClick={() => togglePanel('cosmic')}>COSMIC</Btn>
           <Btn active={panels.media} color="cyan" onClick={() => togglePanel('media')}>MEDIA</Btn>
           <Btn active={panels.iss} color="green" onClick={() => togglePanel('iss')}>ISS</Btn>
           <Btn active={panels.weather} color="yellow" onClick={() => togglePanel('weather')}>WEATHER</Btn>

@@ -19,6 +19,9 @@ import SpaceWeatherPanel from './components/SpaceWeatherPanel'
 import GravitySimulator from './components/GravitySimulator'
 import SizeComparison from './components/SizeComparison'
 import MissionTimeline from './components/MissionTimeline'
+import StellarEvolution from './components/StellarEvolution'
+import CosmicAddress from './components/CosmicAddress'
+import LaunchSimulator from './components/LaunchSimulator'
 import NasaMediaBrowser from './components/NasaMediaBrowser'
 import SkyTonightPanel from './components/SkyTonightPanel'
 import LoadingScreen from './components/LoadingScreen'
@@ -45,6 +48,7 @@ function App() {
     travel: false, chat: false, asteroids: false, mars: false,
     exoplanets: false, deepSpace: false, iss: false, weather: false,
     gravity: false, size: false, missions: false, media: false, sky: false,
+    launch: false, cosmic: false, evolution: false,
   })
 
   const togglePanel = useCallback((name) => {
@@ -59,7 +63,7 @@ function App() {
       if (rightPanels.includes(name) && next[name]) {
         rightPanels.forEach((p) => { if (p !== name) next[p] = false })
       }
-      const centerPanels = ['gravity', 'size']
+      const centerPanels = ['gravity', 'size', 'launch', 'cosmic', 'evolution']
       if (centerPanels.includes(name) && next[name]) {
         centerPanels.forEach((p) => { if (p !== name) next[p] = false })
       }
@@ -210,6 +214,7 @@ function App() {
               system={proceduralSystem}
               onClose={() => { setProceduralSystem(null); setProceduralPos(null) }}
               onEnterSystem={handleEnterSystem3D}
+              onShowEvolution={() => togglePanel('evolution')}
             />
           )}
           {isSolar && panels.travel && <TravelCalculator planets={planets} onClose={() => closePanel('travel')} />}
@@ -220,6 +225,11 @@ function App() {
           {/* CENTER PANELS */}
           {isSolar && panels.gravity && <GravitySimulator onClose={() => closePanel('gravity')} />}
           {isSolar && panels.size && <SizeComparison onClose={() => closePanel('size')} />}
+          {isSolar && panels.launch && <LaunchSimulator onClose={() => closePanel('launch')} />}
+          {panels.cosmic && <CosmicAddress onClose={() => closePanel('cosmic')} />}
+          {(isGalaxy || isDeepSpace) && panels.evolution && proceduralSystem && (
+            <StellarEvolution system={proceduralSystem} onClose={() => closePanel('evolution')} />
+          )}
 
           {/* GLOBAL */}
           {panels.chat && <AIChatPanel onClose={() => closePanel('chat')} />}
